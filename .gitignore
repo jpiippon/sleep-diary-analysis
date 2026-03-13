@@ -1,0 +1,14 @@
+# R and RStudio
+.Rhistory
+.Rproj.user/
+
+# Data
+data/raw/
+data/derived/
+
+# Generated outputs
+figures/
+outputs/
+
+# Archive folder (old code)
+archive/
