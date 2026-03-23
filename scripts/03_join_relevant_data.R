@@ -1,37 +1,55 @@
 # =============================================================================
 # 03_join_relevant_data.R
 #
-# Purpose: Join the sleep diary dataset (loki) with environmental sensor (mittari)
-#          data to create an analysis-ready dataset.
+# Purpose: Join the sleep diary dataset with nightly environmental sensor data
+#          and create analysis-ready datasets for:
+#          1) all diary nights
+#          2) nights with valid sensor data
 #
 # Requirements:
-#  - Run `scripts/01_load_main_data.R` to create `df_clean`.
-#  - Run `scripts/02_load_co2_temp_data.R` to create `dat_mittari`.
+#  - Run `scripts/01_load_main_data.R` to create `df_clean`
+#  - Run `scripts/02_load_co2_temp_data.R` to create `dat_mittari`
 #
 # Output:
-#  - `sleep_mittari`: full join (sleep diary + nightly sensor averages)
-#  - `sleep_mittari_sensor`: subset of nights with sensor data available
+#  - sleep_mittari: full diary dataset with sensor variables added when relevant
+#  - sleep_mittari_sensor: subset for sensor-based analyses
 # =============================================================================
 
-# Load required libraries (if not already loaded)
 library(tidyverse)
 library(here)
 
-# Load source datasets
-source(here::here("scripts", "01_load_main_data.R"))
-source(here::here("scripts", "02_load_co2_temp_data.R"))
+source(here("scripts", "01_load_main_data.R"))
+source(here("scripts", "02_load_co2_temp_data.R"))
 
-# Sanity checks
-if (!exists("df_clean")) stop("df_clean not found. Run 01_load_main_data.R first.")
-if (!exists("dat_mittari")) stop("dat_mittari not found. Run 02_load_co2_temp_data.R first.")
+if (!exists("df_clean")) {
+  stop("df_clean not found. Run 01_load_main_data.R first.")
+}
 
-# Join on the date (sleep diary date to sensor night date)
+if (!exists("dat_mittari")) {
+  stop("dat_mittari not found. Run 02_load_co2_temp_data.R first.")
+}
+
 sleep_mittari <- df_clean |>
-  left_join(dat_mittari, by = c("date" = "yo_pvm"))
+  left_join(dat_mittari, by = c("date" = "yo_pvm")) |>
+  mutate(
+    sensor_expected = mittaripaalla == 1,
+    sensor_available = !is.na(ka_co2) | !is.na(ka_temp) | !is.na(ka_humid),
+    sensor_ready = sensor_expected & sensor_available,
 
-# Optionally: focus only on nights where the sensor data exists
+    # Do not use sensor values on nights when the sensor was not supposed to be on
+    across(
+      c(ka_co2, ka_temp, ka_humid, n_obs, first_obs, last_obs),
+      ~ if_else(sensor_expected, .x, NA)
+    )
+  )
+
 sleep_mittari_sensor <- sleep_mittari |>
-  filter(!is.na(ka_co2) | !is.na(ka_temp) | !is.na(ka_humid))
+  filter(sensor_ready)
 
-cat("Joined sleep diary to sensor data:", nrow(sleep_mittari), "rows\n")
-cat("Nights with sensor data:", nrow(sleep_mittari_sensor), "rows\n")
+cat("\n=== JOIN SUMMARY ===\n")
+cat("All diary nights:", nrow(sleep_mittari), "\n")
+cat("Nights where sensor was expected:", sum(sleep_mittari$sensor_expected, na.rm = TRUE), "\n")
+cat("Nights with sensor data available:", sum(sleep_mittari$sensor_available, na.rm = TRUE), "\n")
+cat("Nights ready for sensor analysis:", nrow(sleep_mittari_sensor), "\n")
+cat("Nights expected but missing sensor data:",
+    sum(sleep_mittari$sensor_expected & !sleep_mittari$sensor_available, na.rm = TRUE), "\n")

@@ -30,6 +30,21 @@ This repository contains R scripts for cleaning, joining, and analyzing sleep di
 - Prefer small diffs.
 - Keep existing folder structure.
 
-## Validation
-- After editing R code, check for obvious name mismatches, missing columns, and join-key problems.
-- Flag uncertainty instead of guessing variable meanings.
+
+## Execution and validation
+- After editing R code, run `Rscript scripts/99_smoke_test.R`.
+- If the smoke test fails, fix the issue and rerun the script until it passes.
+- Do not claim success unless the smoke test completes without errors.
+- If a requested change affects modeling code, prefer validating the smallest relevant script first before running heavier end-to-end scripts.
+- Do not run long plotting or full analysis scripts unless needed for the task or explicitly requested.
+
+## Script-specific expectations
+- `scripts/01_load_main_data.R` must create `sleep_diary` and `df_clean`.
+- `scripts/02_load_co2_temp_data.R` must create `dat_mittari` and `sensor_nights`.
+- `scripts/03_join_relevant_data.R` must create `sleep_mittari` and `sleep_mittari_sensor`.
+- Keep these object names stable unless explicitly asked to change them.
+
+## Change discipline
+- Prefer the smallest possible working diff.
+- Preserve existing comments, structure, and output file names when they are already clear.
+- When uncertain about variable meaning, do not infer silently; leave a short inline note or flag the uncertainty.

@@ -399,29 +399,34 @@ print(temp_analysis)
 # ============================================================================
 
 co2_monthly <- sleep_mittari_sensor |>
-  mutate(year_month = floor_date(date, "month")) |>
-  group_by(year_month) |>
-  summarise(mean_co2 = mean(ka_co2, na.rm = TRUE), n = n(), .groups = "drop")
+  mutate(year = year(date)) |>
+  group_by(year) |>
+  summarise(mean_co2 = mean(ka_co2, na.rm = TRUE), n = n(), .groups = "drop") |>
+  arrange(year)
 
-p_env_time <- ggplot(co2_monthly, aes(x = year_month, y = mean_co2)) +
+p_env_time <- ggplot(co2_monthly, aes(x = year, y = mean_co2)) +
   geom_line(color = col_dark_blue, linewidth = 1) +
   geom_point(color = col_dark_blue, size = 3) +
-  labs(title = "Monthly Average CO2 Levels", x = "Date", y = "CO2 (ppm)") +
+  labs(title = "Yearly Average CO2 Levels", x = "Year", y = "CO2 (ppm)") +
   theme_sleep()
 
 print(p_env_time)
 ggsave(here("figures", "07_co2_over_time.png"), p_env_time, width = 10, height = 6, dpi = 300)
 
 temp_monthly <- sleep_mittari_sensor |>
-  mutate(year_month = floor_date(date, "month")) |>
-  group_by(year_month) |>
-  summarise(mean_temp = mean(ka_temp, na.rm = TRUE), n = n(), .groups = "drop")
+  mutate(year = year(date)) |>
+  group_by(year) |>
+  summarise(mean_temp = mean(ka_temp, na.rm = TRUE), n = n(), .groups = "drop") |>
+  arrange(year)
 
-p_temp_time <- ggplot(temp_monthly, aes(x = year_month, y = mean_temp)) +
+p_temp_time <- ggplot(temp_monthly, aes(x = year, y = mean_temp)) +
   geom_line(color = col_steel, linewidth = 1) +
   geom_point(color = col_steel, size = 3) +
   labs(title = "Monthly Average Room Temperature", x = "Date", y = "Temperature (°C)") +
   theme_sleep()
+
+p_temp_time <- p_temp_time +
+  labs(title = "Yearly Average Room Temperature", x = "Year")
 
 print(p_temp_time)
 ggsave(here("figures", "08_temperature_over_time.png"), p_temp_time, width = 10, height = 6, dpi = 300)
