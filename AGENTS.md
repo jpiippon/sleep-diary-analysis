@@ -28,8 +28,17 @@ This repository contains R scripts for cleaning, joining, and analyzing sleep di
 - When editing a script, change only that script unless explicitly asked to update others.
 - If a change may break another script, explain that clearly before or within the edit.
 - Prefer small diffs.
-- Keep existing folder structure.
+- Keep the main numbered pipeline stable unless explicitly changing the core workflow.
+- Put focused one-variable reporting scripts in `scripts/variable_specific/`.
+- Put figures from focused one-variable reporting scripts in `figures/variable_specific/<variable_name>/`.
 
+## Variable-specific reporting scripts
+- Use `scripts/variable_specific/weekday.R` as the template for focused reporting scripts.
+- Keep a consistent structure: settings, analysis data, descriptive summaries, visualizations, models, adjusted predictions, and reporting summary.
+- Adapt the visualization and model form to the variable type.
+- For categorical or ordered variables, prefer grouped summaries, boxplots, category-level rates, and factor-based regression terms.
+- For numeric variables, prefer scatterplots, binned summaries, and linear or flexible functional forms when substantively justified.
+- Do not force all variables into the exact same model if the measurement scale requires a different specification.
 
 ## Execution and validation
 - After editing R code, run `Rscript scripts/99_smoke_test.R`.
