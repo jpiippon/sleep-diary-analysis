@@ -2,7 +2,7 @@
 
 This repository contains a longitudinal sleep diary project that combines self-tracked sleep records with nightly bedroom sensor data on CO2, temperature, and humidity.
 
-The aim is to study how behavioral, temporal, and environmental factors are associated with night-to-night variation in sleep duration and insomnia-related outcomes. The repository is organized as a reproducible analysis workflow, from raw data cleaning to descriptive analysis and regression modeling.
+The aim is to study how behavioral, temporal, and environmental factors are associated with night-to-night variation in sleep duration and insomnia-related outcomes. The repository is organized as a reproducible analysis workflow, from raw data cleaning to descriptive analysis, regression modeling, and variable-specific reporting.
 
 ## Study design
 
@@ -13,21 +13,24 @@ The project is based on within-person longitudinal data. The analytical workflow
 - reproducible data cleaning and variable construction
 - descriptive visualization
 - regression-based modeling
+- variable-specific reporting analyses
 
 The empirical focus is on variation across nights rather than differences between individuals.
 
 ## Repository structure
 
 - `data/raw/`: raw input files
-- `scripts/`: data cleaning, joining, descriptive, and modeling scripts
-- `figures/`: generated figures
+- `scripts/`: main data cleaning, joining, descriptive, and modeling scripts
+- `scripts/variable_specific/`: focused reporting scripts for individual variables
+- `figures/`: generated figures from the main workflow
+- `figures/variable_specific/`: generated figures from variable-specific scripts
 - `outputs/`: model summaries and other analysis outputs
 - `archive/`: older exploratory material
 - `projects/`: additional project-specific work
 
 ## Analysis workflow
 
-Run scripts in numeric order.
+Run the main scripts in numeric order.
 
 1. `scripts/01_load_main_data.R`  
    Loads and cleans the sleep diary data.
@@ -50,6 +53,17 @@ Run scripts in numeric order.
 7. `scripts/99_smoke_test.R`  
    Runs a lightweight validation check after code changes.
 
+## Variable-specific reporting scripts
+
+Focused reporting scripts are stored in `scripts/variable_specific/`. These scripts are not part of the required numbered pipeline. They are intended for deeper analysis of one variable at a time while keeping a consistent structure across outputs.
+
+For example:
+
+- `scripts/variable_specific/weekday.R` analyzes sleep duration and insomnia by day of week.
+- Generated figures are saved to `figures/variable_specific/weekday/`.
+
+The same structure can be adapted for other categorical, ordered, or numeric variables. Categorical variables typically use grouped summaries, boxplots, and factor-based models. Numeric variables typically use scatterplots, binned summaries, and linear or flexible functional forms.
+
 ## Methods currently implemented
 
 The repository currently includes:
@@ -60,6 +74,7 @@ The repository currently includes:
 - descriptive analysis of sleep patterns
 - baseline regression models
 - time fixed-effects models for within-series analysis
+- variable-specific reporting scripts for focused interpretation
 
 ## Reproducibility
 
@@ -75,6 +90,7 @@ The repository currently supports:
 - descriptive analysis
 - baseline modeling
 - fixed-effects extensions for within-person inference
+- variable-specific reporting analyses
 
 Ongoing work focuses on improving model specification, validation, and presentation of results.
 
