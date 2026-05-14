@@ -12,7 +12,7 @@
 # Outputs:
 #   - descriptive summaries printed to console
 #   - variable-specific figures saved to figures/variable_specific/weekday/
-#   - raw, adjusted, and time-adjusted models for reporting
+#   - raw, adjusted, and month fixed-effect models for reporting
 #
 # Notes for adapting this script:
 #   - For categorical or ordered variables, use boxplots, category summaries,
@@ -242,51 +242,157 @@ ggsave(
 # MODELS
 # =============================================================================
 
-m_raw <- lm(
-  duration ~ day_of_week,
-  data = dat_weekday
-)
+reference_day <- c(
+  intersect("Monday", levels(dat_weekday$day_of_week)),
+  levels(dat_weekday$day_of_week)[1]
+) |>
+  purrr::pluck(1)
 
 dat_adjusted <- dat_weekday |>
+  mutate(
+    day_of_week = fct_relevel(day_of_week, reference_day),
+    year_month = factor(format(date, "%Y-%m"))
+  ) |>
   drop_na(bedtime, coffee, stress, health, exercise)
 
-m_adjusted <- lm(
-  duration ~ day_of_week + bedtime + coffee + stress + health + exercise,
-  data = dat_adjusted
+models_weekday <- list(
+  "Raw" = feols(
+    duration ~ i(day_of_week, ref = reference_day),
+    data = dat_weekday,
+    vcov = "hetero"
+  ),
+  "Adjusted" = feols(
+    duration ~ i(day_of_week, ref = reference_day) +
+      bedtime + coffee + stress + health + exercise,
+    data = dat_adjusted,
+    vcov = "hetero"
+  ),
+  "Month FE" = feols(
+    duration ~ i(day_of_week, ref = reference_day) +
+      bedtime + coffee + stress + health + exercise |
+      year_month,
+    data = dat_adjusted,
+    vcov = "hetero"
+  )
 )
 
-m_time_adjusted <- feols(
-  duration ~ day_of_week + bedtime + coffee + stress + health + exercise |
-    year_month,
-  data = dat_adjusted,
-  vcov = "hetero"
+purrr::iwalk(
+  models_weekday,
+  \(model, model_name) {
+    cat("\n==========", toupper(model_name), "WEEKDAY DIFFERENCES ==========\n")
+    print(summary(model))
+  }
 )
-
-cat("\n========== MODEL 1: RAW WEEKDAY DIFFERENCES ==========\n")
-print(summary(m_raw))
-
-cat("\n========== MODEL 2: ADJUSTED WEEKDAY DIFFERENCES ==========\n")
-print(summary(m_adjusted))
-
-cat("\n========== MODEL 3: TIME-ADJUSTED WEEKDAY DIFFERENCES ==========\n")
-print(summary(m_time_adjusted))
 
 model_comparison <- tibble(
-  model = c("Raw", "Adjusted", "Time-adjusted"),
-  n = c(nobs(m_raw), nobs(m_adjusted), nobs(m_time_adjusted)),
-  rmse = c(
-    sigma(m_raw),
-    sigma(m_adjusted),
-    fitstat(m_time_adjusted, "rmse") |> as.numeric()
-  )
+  model = names(models_weekday),
+  n = purrr::map_int(models_weekday, nobs),
+  rmse = purrr::map_dbl(models_weekday, \(model) sqrt(mean(resid(model)^2)))
 )
 
 cat("\n========== MODEL COMPARISON ==========\n")
 print(model_comparison)
 
 # =============================================================================
+# REGRESSION COEFFICIENT PLOT
+# =============================================================================
+
+get_weekday_results <- function(model_results) {
+  purrr::map2_dfr(
+    model_results,
+    names(model_results),
+    \(model, model_name) {
+      coefs <- coef(model)
+      ses <- se(model)
+
+      tibble(
+        term = names(coefs),
+        estimate = as.numeric(coefs),
+        std_error = as.numeric(ses)
+      ) |>
+        filter(str_detect(term, "^day_of_week::")) |>
+        transmute(
+          model = model_name,
+          weekday = str_remove(term, "^day_of_week::"),
+          estimate_hours = estimate,
+          ci_low_hours = estimate - 1.96 * std_error,
+          ci_high_hours = estimate + 1.96 * std_error,
+          estimate_minutes = estimate_hours * 60,
+          ci_low_minutes = ci_low_hours * 60,
+          ci_high_minutes = ci_high_hours * 60
+        )
+    }
+  )
+}
+
+weekday_regression_results <- get_weekday_results(models_weekday) |>
+  mutate(
+    model = factor(model, levels = c("Raw", "Adjusted", "Month FE")),
+    weekday = factor(weekday, levels = rev(levels(dat_adjusted$day_of_week)))
+  )
+
+p_weekday_regression <- weekday_regression_results |>
+  ggplot(
+    aes(
+      y = weekday,
+      x = estimate_minutes,
+      xmin = ci_low_minutes,
+      xmax = ci_high_minutes,
+      color = model
+    )
+  ) +
+  geom_linerange(
+    linewidth = 2,
+    alpha = 0.6,
+    position = position_dodge(width = 0.55)
+  ) +
+  geom_point(
+    size = 2.2,
+    position = position_dodge(width = 0.55)
+  ) +
+  geom_vline(xintercept = 0, linewidth = 0.3, linetype = "dashed") +
+  scale_color_manual(
+    values = c(
+      "Raw" = col_light_blue,
+      "Adjusted" = col_steel,
+      "Month FE" = col_orange
+    )
+  ) +
+  scale_x_continuous(
+    labels = \(x) paste0(round(x), " min"),
+    breaks = scales::breaks_pretty(n = 6)
+  ) +
+  labs(
+    title = "Weekday differences in sleep duration",
+    subtitle = paste0("Estimated difference relative to ", reference_day),
+    x = "Difference in sleep duration",
+    y = NULL,
+    color = NULL
+  ) +
+  theme_sleep() +
+  theme(
+    legend.position = "bottom",
+    panel.grid.major.x = element_line(color = "grey90")
+  )
+
+print(p_weekday_regression)
+
+ggsave(
+  file.path(figure_dir, "weekday_regression_coefficients.png"),
+  p_weekday_regression,
+  width = 10,
+  height = 6,
+  dpi = 300
+)
+
+# =============================================================================
 # ADJUSTED PREDICTIONS
 # =============================================================================
+
+m_adjusted_prediction <- lm(
+  duration ~ day_of_week + bedtime + coffee + stress + health + exercise,
+  data = dat_adjusted
+)
 
 reference_values <- dat_adjusted |>
   summarise(
@@ -324,7 +430,7 @@ pred_weekday <- tibble(day_of_week = levels(dat_adjusted$day_of_week)) |>
       levels = levels(dat_adjusted$exercise),
       ordered = is.ordered(dat_adjusted$exercise)
     ),
-    pred_duration = predict(m_adjusted, newdata = .)
+    pred_duration = predict(m_adjusted_prediction, newdata = .)
   )
 
 p_adjusted <- pred_weekday |>
@@ -355,5 +461,9 @@ ggsave(
 # =============================================================================
 
 cat("\n========== REPORTING SUMMARY ==========\n")
-cat("The script estimates raw, adjusted, and month-adjusted weekday differences in sleep duration.\n")
-cat("Figures saved to:", figure_dir, "\n")
+cat(
+  "The script estimates raw, adjusted, and month fixed-effect weekday differences",
+  "in sleep duration relative to", reference_day, ".\n"
+)
+cat("Main regression figure saved to:", file.path(figure_dir, "weekday_regression_coefficients.png"), "\n")
+cat("Other figures saved to:", figure_dir, "\n")
