@@ -702,7 +702,10 @@ preferred_duration_model <- models_duration[[preferred_duration_model_name]]
 
 pred_duration <- prediction_grid |>
   mutate(
-    predicted_duration = predict(preferred_duration_model, newdata = .) |>
+    predicted_duration = predict(
+      preferred_duration_model,
+      newdata = as.data.frame(pick(everything()))
+    ) |>
       as.numeric(),
     model = preferred_duration_model_name
   ) |>
@@ -739,7 +742,11 @@ if (length(models_insomnia) > 0) {
   pred_insomnia <- prediction_grid |>
     mutate(
       predicted_insomnia = tryCatch(
-        predict(preferred_insomnia_model, newdata = ., type = "response") |>
+        predict(
+          preferred_insomnia_model,
+          newdata = as.data.frame(pick(everything())),
+          type = "response"
+        ) |>
           as.numeric(),
         error = \(e) {
           warning("Insomnia prediction failed: ", conditionMessage(e))

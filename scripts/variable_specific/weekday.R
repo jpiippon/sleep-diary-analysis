@@ -430,7 +430,10 @@ pred_weekday <- tibble(day_of_week = levels(dat_adjusted$day_of_week)) |>
       levels = levels(dat_adjusted$exercise),
       ordered = is.ordered(dat_adjusted$exercise)
     ),
-    pred_duration = predict(m_adjusted_prediction, newdata = .)
+    pred_duration = predict(
+      m_adjusted_prediction,
+      newdata = as.data.frame(pick(everything()))
+    )
   )
 
 p_adjusted <- pred_weekday |>

@@ -694,7 +694,10 @@ make_prediction_data <- function(var_name, var_label) {
       exercise = factor(reference_values$exercise, levels = levels(dat_model$exercise)),
       year_month = factor(reference_values$year_month, levels = levels(dat_model$year_month)),
       "{var_name}" := factor(category, levels = levels(dat_model[[var_name]])),
-      predicted_probability = predict_response(preferred_model, cur_data())
+      predicted_probability = predict_response(
+        preferred_model,
+        as.data.frame(pick(everything()))
+      )
     ) |>
     transmute(
       variable = var_label,

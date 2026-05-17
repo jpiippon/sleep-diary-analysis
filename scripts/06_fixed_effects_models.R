@@ -275,11 +275,25 @@ m_x_resid <- feols(
   vcov = "hetero"
 )
 
-partial_dat <- dat_sensor |>
-  mutate(
-    duration_resid = resid(m_y_resid),
-    co2_resid = resid(m_x_resid)
+# `feols()` can drop rows internally (e.g., due to missingness / singleton FE).
+# So residual vector lengths may not match `nrow(dat_sensor)`. Build the plot
+# data directly from residuals instead of mutating `dat_sensor`.
+y_resid <- resid(m_y_resid)
+x_resid <- resid(m_x_resid)
+
+if (!is.null(names(y_resid)) && !is.null(names(x_resid))) {
+  common_idx <- intersect(names(y_resid), names(x_resid))
+  partial_dat <- tibble(
+    duration_resid = unname(y_resid[common_idx]),
+    co2_resid = unname(x_resid[common_idx])
   )
+} else {
+  n <- min(length(y_resid), length(x_resid))
+  partial_dat <- tibble(
+    duration_resid = unname(y_resid[seq_len(n)]),
+    co2_resid = unname(x_resid[seq_len(n)])
+  )
+}
 
 p_partial_co2 <- ggplot(
   partial_dat,

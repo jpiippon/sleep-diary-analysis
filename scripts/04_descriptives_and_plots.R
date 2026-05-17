@@ -16,7 +16,14 @@ library(here)
 
 source(here("scripts", "03_join_relevant_data.R"))
 
-dir.create(here("figures"), showWarnings = FALSE)
+fig_dir <- here("figures")
+fig_sleep_patterns_dir <- file.path(fig_dir, "01_sleep_patterns")
+fig_personal_factors_dir <- file.path(fig_dir, "02_sleep_personal_factors")
+fig_environment_dir <- file.path(fig_dir, "03_sleep_environment")
+
+dir.create(fig_sleep_patterns_dir, showWarnings = FALSE, recursive = TRUE)
+dir.create(fig_personal_factors_dir, showWarnings = FALSE, recursive = TRUE)
+dir.create(fig_environment_dir, showWarnings = FALSE, recursive = TRUE)
 
 df_clean <- df_clean |>
   drop_na(day_of_week, bedtime, coffee, stress, health)
@@ -120,7 +127,7 @@ p1 <- ggplot(df_ma, aes(x = date)) +
   theme_sleep()
 
 print(p1)
-ggsave(here("figures", "01_sleep_over_time.png"), p1, width = 10, height = 6, dpi = 300)
+ggsave(file.path(fig_sleep_patterns_dir, "01_sleep_over_time.png"), p1, width = 10, height = 6, dpi = 300)
 
 # ============================================================================
 # 3. SLEEP BY DAY OF WEEK
@@ -160,7 +167,7 @@ p2 <- ggplot(df_clean, aes(x = day_of_week, y = duration)) +
   theme(axis.text.x = element_text(face = "bold"))
 
 print(p2)
-ggsave(here("figures", "02_sleep_by_day_of_week.png"), p2, width = 10, height = 6, dpi = 300)
+ggsave(file.path(fig_sleep_patterns_dir, "02_sleep_by_day_of_week.png"), p2, width = 10, height = 6, dpi = 300)
 
 # ============================================================================
 # 4. SLEEP BY BEDTIME
@@ -181,7 +188,7 @@ p3 <- ggplot(df_clean, aes(x = bedtime, y = duration, fill = bedtime)) +
   theme_sleep()
 
 print(p3)
-ggsave(here("figures", "03_sleep_by_bedtime.png"), p3, width = 10, height = 6, dpi = 300)
+ggsave(file.path(fig_personal_factors_dir, "03_sleep_by_bedtime.png"), p3, width = 10, height = 6, dpi = 300)
 
 # ============================================================================
 # 5. SLEEP BY COFFEE INTAKE
@@ -203,7 +210,7 @@ p4 <- ggplot(df_clean, aes(x = coffee, y = duration, fill = coffee)) +
   theme(axis.text.x = element_text(angle = 15, hjust = 1))
 
 print(p4)
-ggsave(here("figures", "04_sleep_by_coffee.png"), p4, width = 10, height = 6, dpi = 300)
+ggsave(file.path(fig_personal_factors_dir, "04_sleep_by_coffee.png"), p4, width = 10, height = 6, dpi = 300)
 
 # ============================================================================
 # 6. SLEEP BY STRESS AND HEALTH
@@ -248,7 +255,7 @@ p5_health <- ggplot(df_clean, aes(x = health, y = duration, fill = health)) +
 p5 <- gridExtra::arrangeGrob(p5_stress, p5_health, ncol = 2,
                               top = "Sleep Patterns by Personal Factors")
 grid::grid.draw(p5)
-ggsave(here("figures", "05_sleep_by_stress_and_health.png"), p5, width = 12, height = 6, dpi = 300)
+ggsave(file.path(fig_personal_factors_dir, "05_sleep_by_stress_and_health.png"), p5, width = 12, height = 6, dpi = 300)
 
 # ============================================================================
 # 7. SLEEP DISTRIBUTION
@@ -272,7 +279,7 @@ p6 <- ggplot(df_clean, aes(x = duration)) +
   theme_sleep()
 
 print(p6)
-ggsave(here("figures", "06_sleep_distribution.png"), p6, width = 10, height = 6, dpi = 300)
+ggsave(file.path(fig_sleep_patterns_dir, "06_sleep_distribution.png"), p6, width = 10, height = 6, dpi = 300)
 
 # ============================================================================
 # 8. KEY FINDINGS SUMMARY
@@ -411,7 +418,7 @@ p_env_time <- ggplot(co2_monthly, aes(x = year, y = mean_co2)) +
   theme_sleep()
 
 print(p_env_time)
-ggsave(here("figures", "07_co2_over_time.png"), p_env_time, width = 10, height = 6, dpi = 300)
+ggsave(file.path(fig_environment_dir, "07_co2_over_time.png"), p_env_time, width = 10, height = 6, dpi = 300)
 
 temp_monthly <- sleep_mittari_sensor |>
   mutate(year = year(date)) |>
@@ -429,7 +436,7 @@ p_temp_time <- p_temp_time +
   labs(title = "Yearly Average Room Temperature", x = "Year")
 
 print(p_temp_time)
-ggsave(here("figures", "08_temperature_over_time.png"), p_temp_time, width = 10, height = 6, dpi = 300)
+ggsave(file.path(fig_environment_dir, "08_temperature_over_time.png"), p_temp_time, width = 10, height = 6, dpi = 300)
 
 # ============================================================================
 # 14. SLEEP vs ENVIRONMENTAL CONDITIONS (SCATTERPLOTS)
@@ -451,7 +458,7 @@ p_sleep_co2 <- ggplot(sleep_mittari_sensor, aes(x = ka_co2, y = duration)) +
   theme_sleep()
 
 print(p_sleep_co2)
-ggsave(here("figures", "09_sleep_vs_co2.png"), p_sleep_co2, width = 10, height = 6, dpi = 300)
+ggsave(file.path(fig_environment_dir, "09_sleep_vs_co2.png"), p_sleep_co2, width = 10, height = 6, dpi = 300)
 
 p_sleep_temp <- ggplot(sleep_mittari_sensor, aes(x = ka_temp, y = duration)) +
   geom_point(alpha = 0.5, size = 2.5, color = col_steel) +
@@ -464,7 +471,7 @@ p_sleep_temp <- ggplot(sleep_mittari_sensor, aes(x = ka_temp, y = duration)) +
   theme_sleep()
 
 print(p_sleep_temp)
-ggsave(here("figures", "10_sleep_vs_temperature.png"), p_sleep_temp, width = 10, height = 6, dpi = 300)
+ggsave(file.path(fig_environment_dir, "10_sleep_vs_temperature.png"), p_sleep_temp, width = 10, height = 6, dpi = 300)
 
 p_sleep_humid <- ggplot(sleep_mittari_sensor, aes(x = ka_humid, y = duration)) +
   geom_point(alpha = 0.5, size = 2.5, color = col_mid_blue) +
@@ -477,7 +484,7 @@ p_sleep_humid <- ggplot(sleep_mittari_sensor, aes(x = ka_humid, y = duration)) +
   theme_sleep()
 
 print(p_sleep_humid)
-ggsave(here("figures", "11_sleep_vs_humidity.png"), p_sleep_humid, width = 10, height = 6, dpi = 300)
+ggsave(file.path(fig_environment_dir, "11_sleep_vs_humidity.png"), p_sleep_humid, width = 10, height = 6, dpi = 300)
 
 # ============================================================================
 # 15. ENVIRONMENTAL CONDITIONS BOXPLOTS
@@ -506,6 +513,6 @@ p_env_box <- sleep_mittari_sensor |>
   theme_sleep()
 
 print(p_env_box)
-ggsave(here("figures", "12_sleep_by_co2_category.png"), p_env_box, width = 10, height = 6, dpi = 300)
+ggsave(file.path(fig_environment_dir, "12_sleep_by_co2_category.png"), p_env_box, width = 10, height = 6, dpi = 300)
 
-cat("\n✓ Analysis complete. Plots saved to figures/.\n")
+cat("\n✓ Analysis complete. Plots saved to figures/ subfolders.\n")
