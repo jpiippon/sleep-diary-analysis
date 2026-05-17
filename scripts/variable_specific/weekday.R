@@ -3,23 +3,24 @@
 #
 # Purpose: Analyze the association between day of week and sleep outcomes
 #
-# Research question:
+# Research questions:
 #   Does sleep duration vary systematically by day of week?
+#   Does recorded insomnia vary systematically by day of week?
 #
 # Input:
 #   df_clean from scripts/01_load_main_data.R
 #
 # Outputs:
 #   - descriptive summaries printed to console
-#   - variable-specific figures saved to figures/variable_specific/weekday/
+#   - numbered variable-specific figures saved to figures/variable_specific/weekday/
+#   - model summaries and tables saved to outputs/variable_specific/weekday/
 #   - raw, adjusted, and month fixed-effect models for reporting
 #
-# Notes for adapting this script:
-#   - For categorical or ordered variables, use boxplots, category summaries,
-#     and factor-based regression terms.
-#   - For numeric variables, use scatterplots, binned summaries, and either
-#     linear, polynomial, or spline terms depending on the expected association.
-#   - Keep the general structure stable across variable-specific scripts.
+# Notes for interpretation:
+#   - Day of week is treated as a categorical exposure.
+#   - Sleep duration and any recorded insomnia are treated as outcomes.
+#   - Results should be interpreted as associations, not causal effects.
+#   - Month fixed effects compare weekdays within the same year-month period.
 # =============================================================================
 
 library(tidyverse)
@@ -35,8 +36,10 @@ if (!exists("df_clean")) {
 }
 
 figure_dir <- here("figures", "variable_specific", "weekday")
+output_dir <- here("outputs", "variable_specific", "weekday")
 
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 # =============================================================================
 # SETTINGS
@@ -46,11 +49,7 @@ variable_name <- "day_of_week"
 variable_label <- "Day of week"
 outcome_name <- "duration"
 outcome_label <- "Sleep duration (hours)"
-
-# Variable type guidance for future scripts:
-#   categorical: weekday, bedtime, coffee, stress, health, exercise, phone parking
-#   numeric: CO2, temperature, humidity, screen time, continuous sleep measures
-variable_type <- "categorical"
+variable_type <- "categorical exposure"
 
 # =============================================================================
 # COLOR SYSTEM
@@ -92,10 +91,64 @@ theme_sleep <- function() {
     )
 }
 
+save_plot <- function(plot, filename, width = 10, height = 6) {
+  ggsave(
+    file.path(figure_dir, filename),
+    plot,
+    width = width,
+    height = height,
+    dpi = 300
+  )
+}
+
 get_mode <- function(x) {
   x_no_na <- x[!is.na(x)]
   x_levels <- unique(x_no_na)
   x_levels[which.max(tabulate(match(x_no_na, x_levels)))]
+}
+
+pick_reference <- function(x, preferred) {
+  preferred_found <- preferred[preferred %in% levels(x)]
+  c(preferred_found, levels(x)[1]) |>
+    purrr::pluck(1)
+}
+
+fmt_pct <- function(x, accuracy = 1) {
+  scales::percent(x, accuracy = accuracy)
+}
+
+fmt_min <- function(x) {
+  paste0(if_else(x > 0, "+", ""), round(x), " min")
+}
+
+safe_feglm <- function(fml, data, model_name) {
+  tryCatch(
+    feglm(
+      fml = fml,
+      data = data,
+      family = binomial(link = "logit"),
+      vcov = "hetero"
+    ),
+    error = \(e) {
+      warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
+      NULL
+    }
+  )
+}
+
+binomial_summary <- function(data, group_vars) {
+  data |>
+    group_by(across(all_of(group_vars))) |>
+    summarise(
+      n = n(),
+      insomnia_n = sum(insomnia_any == 1, na.rm = TRUE),
+      insomnia_rate = mean(insomnia_any == 1, na.rm = TRUE),
+      se = sqrt(insomnia_rate * (1 - insomnia_rate) / n),
+      ci_low = pmax(insomnia_rate - 1.96 * se, 0),
+      ci_high = pmin(insomnia_rate + 1.96 * se, 1),
+      .groups = "drop"
+    ) |>
+    mutate(across(c(insomnia_rate, se, ci_low, ci_high), \(x) round(x, 3)))
 }
 
 # =============================================================================
@@ -103,23 +156,29 @@ get_mode <- function(x) {
 # =============================================================================
 
 dat_weekday <- df_clean |>
-  mutate(year_month = factor(format(date, "%Y-%m"))) |>
+  mutate(
+    year_month = factor(format(date, "%Y-%m")),
+    insomnia_any = as.integer(insomnia_num > 0)
+  ) |>
   select(
     date,
     year_month,
     day_of_week,
     duration,
     insomnia_num,
+    insomnia_any,
     bedtime,
     coffee,
     stress,
     health,
     exercise
   ) |>
-  drop_na(day_of_week, duration)
+  drop_na(day_of_week, duration, insomnia_num)
+
+n_total <- nrow(dat_weekday)
 
 cat("\n========== WEEKDAY ANALYSIS SAMPLE ==========\n")
-cat("Observations:", nrow(dat_weekday), "\n")
+cat("Observations:", n_total, "\n")
 cat(
   "Date range:", format(min(dat_weekday$date), "%Y-%m-%d"), "to",
   format(max(dat_weekday$date), "%Y-%m-%d"), "\n"
@@ -133,41 +192,87 @@ weekday_summary <- dat_weekday |>
   group_by(day_of_week) |>
   summarise(
     n = n(),
+    share = n / nrow(dat_weekday),
     mean_sleep = mean(duration, na.rm = TRUE),
     median_sleep = median(duration, na.rm = TRUE),
     sd_sleep = sd(duration, na.rm = TRUE),
     se_sleep = sd_sleep / sqrt(n),
     ci_low = mean_sleep - 1.96 * se_sleep,
     ci_high = mean_sleep + 1.96 * se_sleep,
-    insomnia_rate = mean(insomnia_num > 0, na.rm = TRUE),
+    insomnia_n = sum(insomnia_any == 1, na.rm = TRUE),
+    insomnia_rate = mean(insomnia_any == 1, na.rm = TRUE),
+    insomnia_se = sqrt(insomnia_rate * (1 - insomnia_rate) / n),
+    insomnia_ci_low = pmax(insomnia_rate - 1.96 * insomnia_se, 0),
+    insomnia_ci_high = pmin(insomnia_rate + 1.96 * insomnia_se, 1),
     .groups = "drop"
   ) |>
   mutate(
+    distribution_label = paste0(fmt_pct(share, accuracy = 1), "\n(n=", n, ")"),
+    median_label = paste0("Median: ", median_sleep, " h"),
+    insomnia_label = fmt_pct(insomnia_rate, accuracy = 1),
     across(
-      c(mean_sleep, median_sleep, sd_sleep, se_sleep, ci_low, ci_high, insomnia_rate),
+      c(
+        share, mean_sleep, median_sleep, sd_sleep, se_sleep, ci_low, ci_high,
+        insomnia_rate, insomnia_se, insomnia_ci_low, insomnia_ci_high
+      ),
       \(x) round(x, 3)
     )
   )
 
 cat("\n========== SLEEP DURATION BY WEEKDAY ==========\n")
-print(weekday_summary, n = Inf)
+print(weekday_summary, n = Inf, width = Inf)
+
+write_csv(weekday_summary, file.path(output_dir, "weekday_summary.csv"))
 
 # =============================================================================
-# VISUALIZATIONS
+# DESCRIPTIVE VISUALIZATIONS
 # =============================================================================
 
-p_distribution <- dat_weekday |>
-  ggplot(aes(x = day_of_week, y = duration, fill = day_of_week)) +
-  geom_boxplot(alpha = 0.75, outlier.shape = NA) +
-  geom_jitter(width = 0.15, alpha = 0.12, size = 1.5, color = col_dark_text) +
-  stat_summary(fun = mean, geom = "point", shape = 18, size = 3, color = col_orange) +
+p_distribution <- weekday_summary |>
+  ggplot(aes(x = day_of_week, y = share, fill = day_of_week)) +
+  geom_col(alpha = 0.85, width = 0.72) +
+  geom_text(
+    aes(label = distribution_label),
+    vjust = -0.35,
+    size = 3,
+    color = col_dark_text
+  ) +
+  scale_y_continuous(
+    labels = scales::percent_format(accuracy = 1),
+    limits = c(0, max(weekday_summary$share) + 0.06)
+  ) +
   scale_fill_manual(
     values = make_palette(n_distinct(dat_weekday$day_of_week)),
     guide = "none"
   ) +
   labs(
-    title = "Sleep duration by day of week",
-    subtitle = "Dots show individual nights; diamonds show weekday means",
+    title = "The sleep diary covers weekdays fairly evenly",
+    subtitle = paste0("Share of observed nights (N = ", n_total, ")"),
+    x = NULL,
+    y = "Share of nights"
+  ) +
+  theme_sleep()
+
+p_duration <- dat_weekday |>
+  ggplot(aes(x = day_of_week, y = duration, fill = day_of_week)) +
+  geom_boxplot(alpha = 0.75, outlier.shape = NA, width = 0.62) +
+  geom_jitter(width = 0.12, alpha = 0.08, size = 1.05, color = col_dark_text) +
+  scale_fill_manual(
+    values = make_palette(n_distinct(dat_weekday$day_of_week)),
+    guide = "none"
+  ) +
+  geom_label(
+    data = weekday_summary,
+    aes(x = day_of_week, y = 9.4, label = median_label),
+    inherit.aes = FALSE,
+    size = 2.5,
+    label.size = 0.12,
+    fill = "white",
+    color = col_dark_text
+  ) +
+  labs(
+    title = "Sleep duration varies modestly across weekdays",
+    subtitle = paste0("Boxplots, individual nights, and median sleep durations (N = ", n_total, ")"),
     x = NULL,
     y = outcome_label
   ) +
@@ -185,7 +290,7 @@ p_mean_ci <- weekday_summary |>
   geom_line(linewidth = 1, color = col_dark_blue) +
   geom_point(size = 3, color = col_orange) +
   labs(
-    title = "Mean sleep duration by day of week",
+    title = "Average sleep duration by weekday",
     subtitle = "Means with approximate 95% confidence intervals",
     x = NULL,
     y = "Mean sleep duration (hours)"
@@ -195,109 +300,191 @@ p_mean_ci <- weekday_summary |>
 
 p_insomnia <- weekday_summary |>
   ggplot(aes(x = day_of_week, y = insomnia_rate, group = 1)) +
+  geom_errorbar(
+    aes(ymin = insomnia_ci_low, ymax = insomnia_ci_high),
+    width = 0.12,
+    color = col_dark_blue,
+    alpha = 0.8
+  ) +
   geom_line(linewidth = 1, color = col_dark_blue) +
   geom_point(size = 3, color = col_orange) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  geom_text(
+    aes(label = insomnia_label),
+    vjust = -0.9,
+    size = 3,
+    color = col_dark_text
+  ) +
+  scale_y_continuous(
+    labels = scales::percent_format(accuracy = 1),
+    limits = c(0, min(1, max(weekday_summary$insomnia_ci_high, na.rm = TRUE) + 0.08))
+  ) +
   labs(
-    title = "Insomnia rate by day of week",
-    subtitle = "Share of nights with any recorded insomnia",
+    title = "Insomnia rates differ by weekday",
+    subtitle = "Share of nights with any recorded insomnia; approximate 95% confidence intervals",
     x = NULL,
     y = "Insomnia rate"
   ) +
   theme_sleep()
 
-p_n <- weekday_summary |>
-  ggplot(aes(x = day_of_week, y = n, fill = day_of_week)) +
-  geom_col(alpha = 0.8) +
-  scale_fill_manual(
-    values = make_palette(n_distinct(dat_weekday$day_of_week)),
-    guide = "none"
-  ) +
-  labs(
-    title = "Number of observations by day of week",
-    subtitle = "Observed nights in the analysis sample",
-    x = NULL,
-    y = "Nights"
-  ) +
-  theme_sleep()
-
-p_combined <- (p_distribution / (p_mean_ci + p_insomnia) / p_n) +
-  plot_layout(heights = c(1.3, 1, 0.8)) +
-  plot_annotation(
-    title = "Weekday patterns in sleep outcomes",
-    subtitle = "Sleep duration, insomnia, and observation counts by day of week"
-  )
-
-print(p_combined)
-
-ggsave(
-  file.path(figure_dir, "weekday_combined.png"),
-  p_combined,
-  width = 14,
-  height = 12,
-  dpi = 300
-)
-
 # =============================================================================
-# MODELS
+# MODEL DATA
 # =============================================================================
 
-reference_day <- c(
-  intersect("Monday", levels(dat_weekday$day_of_week)),
-  levels(dat_weekday$day_of_week)[1]
-) |>
-  purrr::pluck(1)
+reference_day <- pick_reference(dat_weekday$day_of_week, c("Mon", "Monday"))
 
-dat_adjusted <- dat_weekday |>
+dat_model <- dat_weekday |>
   mutate(
     day_of_week = fct_relevel(day_of_week, reference_day),
-    year_month = factor(format(date, "%Y-%m"))
+    bedtime = factor(bedtime, levels = levels(bedtime), ordered = FALSE),
+    coffee = factor(coffee, levels = levels(coffee), ordered = FALSE),
+    stress = factor(stress, levels = levels(stress), ordered = FALSE),
+    health = factor(health, levels = levels(health), ordered = FALSE),
+    exercise = factor(exercise, levels = levels(exercise), ordered = FALSE),
+    year_month = fct_drop(year_month)
   ) |>
-  drop_na(bedtime, coffee, stress, health, exercise)
+  drop_na(bedtime, coffee, stress, health, exercise, year_month)
 
-models_weekday <- list(
+reference_bedtime <- pick_reference(dat_model$bedtime, c("Before 23:00"))
+reference_coffee <- pick_reference(dat_model$coffee, c("None"))
+reference_stress <- pick_reference(dat_model$stress, c("No"))
+reference_health <- pick_reference(dat_model$health, c("Healthy"))
+reference_exercise <- pick_reference(dat_model$exercise, c("None"))
+
+cat("\n========== WEEKDAY MODELLING SAMPLE ==========\n")
+cat("Observations:", nrow(dat_model), "\n")
+cat("Reference weekday:", reference_day, "\n")
+cat("Reference bedtime:", reference_bedtime, "\n")
+cat("Reference coffee:", reference_coffee, "\n")
+cat("Reference stress:", reference_stress, "\n")
+cat("Reference health:", reference_health, "\n")
+cat("Reference exercise:", reference_exercise, "\n")
+
+# =============================================================================
+# SLEEP DURATION MODELS
+# =============================================================================
+
+models_duration <- list(
   "Raw" = feols(
     duration ~ i(day_of_week, ref = reference_day),
     data = dat_weekday,
     vcov = "hetero"
   ),
   "Adjusted" = feols(
-    duration ~ i(day_of_week, ref = reference_day) +
-      bedtime + coffee + stress + health + exercise,
-    data = dat_adjusted,
+    duration ~
+      i(day_of_week, ref = reference_day) +
+      i(bedtime, ref = reference_bedtime) +
+      i(coffee, ref = reference_coffee) +
+      i(stress, ref = reference_stress) +
+      i(health, ref = reference_health) +
+      i(exercise, ref = reference_exercise),
+    data = dat_model,
     vcov = "hetero"
   ),
   "Month FE" = feols(
-    duration ~ i(day_of_week, ref = reference_day) +
-      bedtime + coffee + stress + health + exercise |
+    duration ~
+      i(day_of_week, ref = reference_day) +
+      i(bedtime, ref = reference_bedtime) +
+      i(coffee, ref = reference_coffee) +
+      i(stress, ref = reference_stress) +
+      i(health, ref = reference_health) +
+      i(exercise, ref = reference_exercise) |
       year_month,
-    data = dat_adjusted,
+    data = dat_model,
     vcov = "hetero"
   )
 )
 
 purrr::iwalk(
-  models_weekday,
+  models_duration,
   \(model, model_name) {
-    cat("\n==========", toupper(model_name), "WEEKDAY DIFFERENCES ==========\n")
+    cat("\n==========", toupper(model_name), "WEEKDAY MODEL: SLEEP DURATION ==========\n")
     print(summary(model))
   }
 )
 
-model_comparison <- tibble(
-  model = names(models_weekday),
-  n = purrr::map_int(models_weekday, nobs),
-  rmse = purrr::map_dbl(models_weekday, \(model) sqrt(mean(resid(model)^2)))
-)
+duration_model_comparison <- tibble(
+  model = names(models_duration),
+  n = purrr::map_int(models_duration, nobs),
+  rmse = purrr::map_dbl(models_duration, \(model) sqrt(mean(resid(model)^2)))
+) |>
+  mutate(rmse = round(rmse, 3))
 
-cat("\n========== MODEL COMPARISON ==========\n")
-print(model_comparison)
+cat("\n========== SLEEP DURATION MODEL COMPARISON ==========\n")
+print(duration_model_comparison, n = Inf, width = Inf)
+
+write_csv(duration_model_comparison, file.path(output_dir, "weekday_duration_model_comparison.csv"))
 
 # =============================================================================
-# REGRESSION COEFFICIENT PLOT
+# INSOMNIA MODELS
 # =============================================================================
 
-get_weekday_results <- function(model_results) {
+models_insomnia <- list(
+  "Raw" = safe_feglm(
+    insomnia_any ~ i(day_of_week, ref = reference_day),
+    data = dat_model,
+    model_name = "Raw"
+  ),
+  "Adjusted" = safe_feglm(
+    insomnia_any ~
+      i(day_of_week, ref = reference_day) +
+      i(bedtime, ref = reference_bedtime) +
+      i(coffee, ref = reference_coffee) +
+      i(stress, ref = reference_stress) +
+      i(health, ref = reference_health) +
+      i(exercise, ref = reference_exercise),
+    data = dat_model,
+    model_name = "Adjusted"
+  ),
+  "Month FE" = safe_feglm(
+    insomnia_any ~
+      i(day_of_week, ref = reference_day) +
+      i(bedtime, ref = reference_bedtime) +
+      i(coffee, ref = reference_coffee) +
+      i(stress, ref = reference_stress) +
+      i(health, ref = reference_health) +
+      i(exercise, ref = reference_exercise) |
+      year_month,
+    data = dat_model,
+    model_name = "Month FE"
+  )
+) |>
+  purrr::compact()
+
+if (length(models_insomnia) > 0) {
+  purrr::iwalk(
+    models_insomnia,
+    \(model, model_name) {
+      cat("\n==========", toupper(model_name), "WEEKDAY MODEL: INSOMNIA ==========\n")
+      print(summary(model))
+    }
+  )
+
+  insomnia_model_comparison <- tibble(
+    model = names(models_insomnia),
+    n = purrr::map_int(models_insomnia, nobs),
+    log_likelihood = purrr::map_dbl(models_insomnia, \(model) logLik(model) |> as.numeric()),
+    aic = purrr::map_dbl(models_insomnia, AIC),
+    bic = purrr::map_dbl(models_insomnia, BIC)
+  ) |>
+    mutate(across(c(log_likelihood, aic, bic), \(x) round(x, 2)))
+
+  cat("\n========== INSOMNIA MODEL COMPARISON ==========\n")
+  print(insomnia_model_comparison, n = Inf, width = Inf)
+
+  write_csv(insomnia_model_comparison, file.path(output_dir, "weekday_insomnia_model_comparison.csv"))
+}
+
+# =============================================================================
+# MODEL RESULTS FOR FIGURES
+# =============================================================================
+
+clean_weekday_term <- function(x) {
+  x |>
+    str_remove_all("`") |>
+    str_remove("^day_of_week::")
+}
+
+get_duration_results <- function(model_results) {
   purrr::map2_dfr(
     model_results,
     names(model_results),
@@ -313,25 +500,59 @@ get_weekday_results <- function(model_results) {
         filter(str_detect(term, "^day_of_week::")) |>
         transmute(
           model = model_name,
-          weekday = str_remove(term, "^day_of_week::"),
+          weekday = clean_weekday_term(term),
           estimate_hours = estimate,
           ci_low_hours = estimate - 1.96 * std_error,
           ci_high_hours = estimate + 1.96 * std_error,
           estimate_minutes = estimate_hours * 60,
           ci_low_minutes = ci_low_hours * 60,
-          ci_high_minutes = ci_high_hours * 60
+          ci_high_minutes = ci_high_hours * 60,
+          label = fmt_min(estimate_minutes)
         )
     }
   )
 }
 
-weekday_regression_results <- get_weekday_results(models_weekday) |>
+weekday_duration_results <- get_duration_results(models_duration) |>
   mutate(
     model = factor(model, levels = c("Raw", "Adjusted", "Month FE")),
-    weekday = factor(weekday, levels = rev(levels(dat_adjusted$day_of_week)))
+    weekday = factor(weekday, levels = rev(setdiff(levels(dat_model$day_of_week), reference_day)))
   )
 
-p_weekday_regression <- weekday_regression_results |>
+write_csv(weekday_duration_results, file.path(output_dir, "weekday_duration_coefficients.csv"))
+
+month_fe_duration_results <- weekday_duration_results |>
+  filter(model == "Month FE")
+
+max_abs_month_fe <- month_fe_duration_results |>
+  summarise(max_abs = max(abs(estimate_minutes), na.rm = TRUE)) |>
+  pull(max_abs)
+
+p_duration_coef_main <- month_fe_duration_results |>
+  ggplot(aes(y = weekday, x = estimate_minutes, xmin = ci_low_minutes, xmax = ci_high_minutes)) +
+  geom_linerange(linewidth = 1.2, color = col_dark_blue, alpha = 0.9) +
+  geom_point(size = 2.5, color = col_orange) +
+  geom_text(
+    aes(label = label),
+    nudge_y = 0.18,
+    size = 3,
+    color = col_dark_text
+  ) +
+  geom_vline(xintercept = 0, linewidth = 0.3, linetype = "dashed") +
+  scale_x_continuous(
+    labels = \(x) paste0(round(x), " min"),
+    breaks = scales::breaks_pretty(n = 6)
+  ) +
+  labs(
+    title = paste0("Largest adjusted weekday difference is about ", round(max_abs_month_fe), " minutes"),
+    subtitle = paste0("Month fixed-effect estimates relative to ", reference_day, "; negative values mean shorter sleep"),
+    x = "Difference in sleep duration (minutes)",
+    y = NULL
+  ) +
+  theme_sleep() +
+  theme(panel.grid.major.x = element_line(color = "grey90"))
+
+p_duration_model_comparison <- weekday_duration_results |>
   ggplot(
     aes(
       y = weekday,
@@ -342,12 +563,12 @@ p_weekday_regression <- weekday_regression_results |>
     )
   ) +
   geom_linerange(
-    linewidth = 2,
-    alpha = 0.6,
+    linewidth = 1.1,
+    alpha = 0.75,
     position = position_dodge(width = 0.55)
   ) +
   geom_point(
-    size = 2.2,
+    size = 2.1,
     position = position_dodge(width = 0.55)
   ) +
   geom_vline(xintercept = 0, linewidth = 0.3, linetype = "dashed") +
@@ -363,8 +584,8 @@ p_weekday_regression <- weekday_regression_results |>
     breaks = scales::breaks_pretty(n = 6)
   ) +
   labs(
-    title = "Weekday differences in sleep duration",
-    subtitle = paste0("Estimated difference relative to ", reference_day),
+    title = "Model comparison for weekday sleep-duration differences",
+    subtitle = paste0("Estimates relative to ", reference_day, "; negative values indicate shorter sleep"),
     x = "Difference in sleep duration",
     y = NULL,
     color = NULL
@@ -375,89 +596,170 @@ p_weekday_regression <- weekday_regression_results |>
     panel.grid.major.x = element_line(color = "grey90")
   )
 
-print(p_weekday_regression)
+if (length(models_insomnia) > 0) {
+  get_insomnia_results <- function(model_results) {
+    purrr::map2_dfr(
+      model_results,
+      names(model_results),
+      \(model, model_name) {
+        coefs <- coef(model)
+        ses <- se(model)
 
-ggsave(
-  file.path(figure_dir, "weekday_regression_coefficients.png"),
-  p_weekday_regression,
-  width = 10,
-  height = 6,
-  dpi = 300
-)
-
-# =============================================================================
-# ADJUSTED PREDICTIONS
-# =============================================================================
-
-m_adjusted_prediction <- lm(
-  duration ~ day_of_week + bedtime + coffee + stress + health + exercise,
-  data = dat_adjusted
-)
-
-reference_values <- dat_adjusted |>
-  summarise(
-    bedtime = get_mode(bedtime),
-    coffee = get_mode(coffee),
-    stress = get_mode(stress),
-    health = get_mode(health),
-    exercise = get_mode(exercise)
-  )
-
-pred_weekday <- tibble(day_of_week = levels(dat_adjusted$day_of_week)) |>
-  mutate(
-    day_of_week = factor(day_of_week, levels = levels(dat_adjusted$day_of_week)),
-    bedtime = factor(
-      reference_values$bedtime,
-      levels = levels(dat_adjusted$bedtime),
-      ordered = is.ordered(dat_adjusted$bedtime)
-    ),
-    coffee = factor(
-      reference_values$coffee,
-      levels = levels(dat_adjusted$coffee),
-      ordered = is.ordered(dat_adjusted$coffee)
-    ),
-    stress = factor(
-      reference_values$stress,
-      levels = levels(dat_adjusted$stress)
-    ),
-    health = factor(
-      reference_values$health,
-      levels = levels(dat_adjusted$health),
-      ordered = is.ordered(dat_adjusted$health)
-    ),
-    exercise = factor(
-      reference_values$exercise,
-      levels = levels(dat_adjusted$exercise),
-      ordered = is.ordered(dat_adjusted$exercise)
-    ),
-    pred_duration = predict(
-      m_adjusted_prediction,
-      newdata = as.data.frame(pick(everything()))
+        tibble(
+          term = names(coefs),
+          estimate = as.numeric(coefs),
+          std_error = as.numeric(ses)
+        ) |>
+          filter(str_detect(term, "^day_of_week::")) |>
+          transmute(
+            model = model_name,
+            weekday = clean_weekday_term(term),
+            odds_ratio = exp(estimate),
+            ci_low = exp(estimate - 1.96 * std_error),
+            ci_high = exp(estimate + 1.96 * std_error)
+          )
+      }
     )
+  }
+
+  weekday_insomnia_results <- get_insomnia_results(models_insomnia) |>
+    mutate(
+      model = factor(model, levels = c("Raw", "Adjusted", "Month FE")),
+      weekday = factor(weekday, levels = rev(setdiff(levels(dat_model$day_of_week), reference_day)))
+    )
+
+  write_csv(weekday_insomnia_results, file.path(output_dir, "weekday_insomnia_odds_ratios.csv"))
+
+  p_insomnia_model_comparison <- weekday_insomnia_results |>
+    ggplot(
+      aes(
+        y = weekday,
+        x = odds_ratio,
+        xmin = ci_low,
+        xmax = ci_high,
+        color = model
+      )
+    ) +
+    geom_vline(xintercept = 1, linewidth = 0.3, linetype = "dashed") +
+    geom_linerange(
+      linewidth = 1.1,
+      alpha = 0.75,
+      position = position_dodge(width = 0.55)
+    ) +
+    geom_point(
+      size = 2.1,
+      position = position_dodge(width = 0.55)
+    ) +
+    scale_x_log10(
+      labels = scales::number_format(accuracy = 0.1),
+      breaks = c(0.5, 1, 2, 4)
+    ) +
+    scale_color_manual(
+      values = c(
+        "Raw" = col_light_blue,
+        "Adjusted" = col_steel,
+        "Month FE" = col_orange
+      ),
+      na.translate = FALSE
+    ) +
+    labs(
+      title = "Model comparison for weekday insomnia odds ratios",
+      subtitle = paste0("Odds ratios relative to ", reference_day, "; values above 1 indicate higher odds"),
+      x = "Odds ratio, log scale",
+      y = NULL,
+      color = NULL
+    ) +
+    theme_sleep() +
+    theme(
+      legend.position = "bottom",
+      panel.grid.major.x = element_line(color = "grey90")
+    )
+}
+
+# =============================================================================
+# MAIN FIGURE AND SUPPORTING FIGURES
+# =============================================================================
+
+p_main <- (p_distribution + p_duration) / (p_duration_coef_main + p_insomnia) +
+  plot_annotation(
+    title = "Weekday differences in sleep are visible but modest",
+    subtitle = "Sleep diary associations across weekdays; uncertainty intervals shown for model-based and rate estimates",
+    tag_levels = "A"
+  ) &
+  theme(plot.tag = element_text(size = 14, face = "bold"))
+
+print(p_main)
+print(p_distribution)
+print(p_duration)
+print(p_duration_coef_main)
+print(p_duration_model_comparison)
+print(p_mean_ci)
+print(p_insomnia)
+
+save_plot(p_main, "weekday_figure1_main.png", width = 14, height = 10)
+save_plot(p_duration_model_comparison, "weekday_figureS1_duration_model_comparison.png", width = 12, height = 8)
+if (exists("p_insomnia_model_comparison")) {
+  print(p_insomnia_model_comparison)
+  save_plot(p_insomnia_model_comparison, "weekday_figureS2_insomnia_model_comparison.png", width = 12, height = 8)
+}
+save_plot(p_distribution, "weekday_figureS3_distribution.png", width = 10, height = 6)
+save_plot(p_duration, "weekday_figureS4_sleep_duration_boxplot.png", width = 10, height = 6)
+save_plot(p_mean_ci, "weekday_figureS5_mean_sleep_ci.png", width = 10, height = 6)
+save_plot(p_insomnia, "weekday_figureS6_insomnia_rate.png", width = 10, height = 6)
+
+# Backward-compatible file names
+save_plot(p_main, "weekday_combined.png", width = 14, height = 10)
+save_plot(p_duration_model_comparison, "weekday_regression_coefficients.png", width = 12, height = 8)
+save_plot(p_duration_coef_main, "weekday_month_fe_duration_coefficients.png", width = 10, height = 6)
+save_plot(p_insomnia, "weekday_insomnia_rate.png", width = 10, height = 6)
+
+# =============================================================================
+# KEY FINDINGS OUTPUT
+# =============================================================================
+
+key_findings_distribution <- weekday_summary |>
+  transmute(
+    section = "distribution",
+    category = as.character(day_of_week),
+    metric = "share_of_nights",
+    value = share
   )
 
-p_adjusted <- pred_weekday |>
-  ggplot(aes(x = day_of_week, y = pred_duration, group = 1)) +
-  geom_line(linewidth = 1, color = col_dark_blue) +
-  geom_point(size = 3, color = col_orange) +
-  labs(
-    title = "Adjusted sleep duration by day of week",
-    subtitle = "Predicted sleep duration with behavioral factors held at their modal values",
-    x = NULL,
-    y = "Predicted sleep duration (hours)"
-  ) +
-  coord_cartesian(ylim = c(0, NA)) +
-  theme_sleep()
+key_findings_median <- weekday_summary |>
+  transmute(
+    section = "sleep_duration",
+    category = as.character(day_of_week),
+    metric = "median_sleep_hours",
+    value = median_sleep
+  )
 
-print(p_adjusted)
+key_findings_insomnia <- weekday_summary |>
+  transmute(
+    section = "insomnia",
+    category = as.character(day_of_week),
+    metric = "observed_insomnia_rate",
+    value = insomnia_rate
+  )
 
-ggsave(
-  file.path(figure_dir, "weekday_adjusted_prediction.png"),
-  p_adjusted,
-  width = 10,
-  height = 6,
-  dpi = 300
-)
+key_findings_duration_model <- month_fe_duration_results |>
+  transmute(
+    section = "month_fe_duration_model",
+    category = as.character(weekday),
+    metric = "difference_minutes_relative_to_reference_day",
+    value = estimate_minutes
+  )
+
+key_findings <- bind_rows(
+  tibble(section = "sample", category = "all", metric = "total_nights", value = n_total),
+  tibble(section = "reference", category = "duration_model", metric = "reference_day", value = NA_real_, note = reference_day),
+  key_findings_distribution |> mutate(note = NA_character_),
+  key_findings_median |> mutate(note = NA_character_),
+  key_findings_insomnia |> mutate(note = NA_character_),
+  key_findings_duration_model |> mutate(note = NA_character_)
+) |>
+  mutate(value = round(value, 3))
+
+write_csv(key_findings, file.path(output_dir, "weekday_key_findings.csv"))
 
 # =============================================================================
 # REPORTING SUMMARY
@@ -466,7 +768,9 @@ ggsave(
 cat("\n========== REPORTING SUMMARY ==========\n")
 cat(
   "The script estimates raw, adjusted, and month fixed-effect weekday differences",
-  "in sleep duration relative to", reference_day, ".\n"
+  "in sleep duration and insomnia relative to", reference_day, ".\n"
 )
-cat("Main regression figure saved to:", file.path(figure_dir, "weekday_regression_coefficients.png"), "\n")
-cat("Other figures saved to:", figure_dir, "\n")
+cat("Recommended main figure saved to:", file.path(figure_dir, "weekday_figure1_main.png"), "\n")
+cat("Duration model-comparison figure saved to:", file.path(figure_dir, "weekday_figureS1_duration_model_comparison.png"), "\n")
+cat("Key findings saved to:", file.path(output_dir, "weekday_key_findings.csv"), "\n")
+cat("Tables saved to:", output_dir, "\n")
