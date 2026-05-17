@@ -14,7 +14,6 @@
 # Outputs:
 #   - descriptive summaries printed to console
 #   - numbered variable-specific figures saved to figures/variable_specific/exercise/
-#   - model summaries and tables saved to outputs/variable_specific/exercise/
 #   - raw, adjusted, and month fixed-effect models for reporting
 #
 # Notes for interpretation:
@@ -36,10 +35,7 @@ if (!exists("df_clean")) {
 }
 
 figure_dir <- here("figures", "variable_specific", "exercise")
-output_dir <- here("outputs", "variable_specific", "exercise")
-
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 # =============================================================================
 # SETTINGS AND HELPERS
@@ -97,24 +93,13 @@ save_plot <- function(plot, filename, width = 10, height = 6) {
   )
 }
 
-get_mode <- function(x) {
-  x_no_na <- x[!is.na(x)]
-  x_levels <- unique(x_no_na)
-  x_levels[which.max(tabulate(match(x_no_na, x_levels)))]
-}
-
 pick_reference <- function(x, preferred) {
   c(intersect(preferred, levels(x)), levels(x)[1]) |>
     purrr::pluck(1)
 }
 
-fmt_pct <- function(x, accuracy = 1) {
-  scales::percent(x, accuracy = accuracy)
-}
-
-fmt_min <- function(x) {
-  paste0(if_else(x > 0, "+", ""), round(x), " min")
-}
+fmt_pct <- function(x, accuracy = 1) scales::percent(x, accuracy = accuracy)
+fmt_min <- function(x) paste0(if_else(x > 0, "+", ""), round(x), " min")
 
 safe_feglm <- function(fml, data, model_name) {
   tryCatch(
@@ -220,8 +205,8 @@ yearly_n <- yearly_exercise_summary |>
 cat("\n========== SLEEP OUTCOMES BY EXERCISE ==========\n")
 print(exercise_summary, n = Inf, width = Inf)
 
-write_csv(exercise_summary, file.path(output_dir, "exercise_summary.csv"))
-write_csv(yearly_exercise_summary, file.path(output_dir, "exercise_by_year.csv"))
+cat("\n========== EXERCISE BY YEAR ==========\n")
+print(yearly_exercise_summary, n = Inf, width = Inf)
 
 # =============================================================================
 # DESCRIPTIVE VISUALIZATIONS
@@ -413,7 +398,8 @@ duration_model_comparison <- tibble(
 ) |>
   mutate(across(c(rmse, r2), \(x) round(x, 3)))
 
-write_csv(duration_model_comparison, file.path(output_dir, "exercise_duration_model_comparison.csv"))
+cat("\n========== SLEEP DURATION MODEL COMPARISON ==========\n")
+print(duration_model_comparison, n = Inf, width = Inf)
 
 # =============================================================================
 # INSOMNIA MODELS
@@ -469,7 +455,8 @@ if (length(models_insomnia) > 0) {
   ) |>
     mutate(across(c(log_likelihood, aic, bic), \(x) round(x, 2)))
 
-  write_csv(insomnia_model_comparison, file.path(output_dir, "exercise_insomnia_model_comparison.csv"))
+  cat("\n========== INSOMNIA MODEL COMPARISON ==========\n")
+  print(insomnia_model_comparison, n = Inf, width = Inf)
 }
 
 # =============================================================================
@@ -517,7 +504,8 @@ exercise_duration_results <- get_duration_results(models_duration) |>
     exercise = factor(exercise, levels = rev(setdiff(levels(dat_model$exercise), reference_exercise)))
   )
 
-write_csv(exercise_duration_results, file.path(output_dir, "exercise_duration_coefficients.csv"))
+cat("\n========== EXERCISE DURATION COEFFICIENTS ==========\n")
+print(exercise_duration_results, n = Inf, width = Inf)
 
 month_fe_duration_results <- exercise_duration_results |>
   filter(model == "Month FE")
@@ -593,7 +581,8 @@ if (length(models_insomnia) > 0) {
       exercise = factor(exercise, levels = rev(setdiff(levels(dat_model$exercise), reference_exercise)))
     )
 
-  write_csv(exercise_insomnia_results, file.path(output_dir, "exercise_insomnia_odds_ratios.csv"))
+  cat("\n========== EXERCISE INSOMNIA ODDS RATIOS ==========\n")
+  print(exercise_insomnia_results, n = Inf, width = Inf)
 
   p_insomnia_model_comparison <- exercise_insomnia_results |>
     ggplot(aes(y = exercise, x = odds_ratio, xmin = ci_low, xmax = ci_high, color = model)) +
@@ -655,32 +644,6 @@ save_plot(p_duration, "sleep_duration_by_exercise.png", width = 8, height = 6)
 save_plot(p_over_time, "exercise_over_time.png", width = 12, height = 6)
 
 # =============================================================================
-# KEY FINDINGS OUTPUT
-# =============================================================================
-
-key_findings <- bind_rows(
-  tibble(section = "sample", category = "all", metric = "total_nights", value = n_total, note = NA_character_),
-  tibble(section = "reference", category = "duration_model", metric = "reference_exercise", value = NA_real_, note = reference_exercise),
-  exercise_summary |>
-    transmute(section = "distribution", category = as.character(exercise), metric = "share_of_nights", value = share, note = NA_character_),
-  exercise_summary |>
-    transmute(section = "sleep_duration", category = as.character(exercise), metric = "median_sleep_hours", value = median_sleep, note = NA_character_),
-  exercise_summary |>
-    transmute(section = "insomnia", category = as.character(exercise), metric = "observed_insomnia_rate", value = insomnia_rate, note = NA_character_),
-  month_fe_duration_results |>
-    transmute(
-      section = "month_fe_duration_model",
-      category = as.character(exercise),
-      metric = "difference_minutes_relative_to_reference_exercise",
-      value = estimate_minutes,
-      note = NA_character_
-    )
-) |>
-  mutate(value = round(value, 3))
-
-write_csv(key_findings, file.path(output_dir, "exercise_key_findings.csv"))
-
-# =============================================================================
 # REPORTING SUMMARY
 # =============================================================================
 
@@ -691,5 +654,4 @@ cat(
 )
 cat("Recommended main figure saved to:", file.path(figure_dir, "exercise_figure1_main.png"), "\n")
 cat("Duration model-comparison figure saved to:", file.path(figure_dir, "exercise_figureS1_duration_model_comparison.png"), "\n")
-cat("Key findings saved to:", file.path(output_dir, "exercise_key_findings.csv"), "\n")
-cat("Tables saved to:", output_dir, "\n")
+cat("Other figures saved to:", figure_dir, "\n")
