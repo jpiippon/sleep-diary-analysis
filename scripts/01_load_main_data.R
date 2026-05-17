@@ -78,14 +78,14 @@ sleep_diary <- df_raw |>
     month_num = month(date),
     month = factor(month_num, levels = 1:12, labels = month.abb),
 
-    # Derive weekday from date instead of trusting manual entry
+    # Derive weekday from date instead of trusting manual entry.
     day_of_week = factor(
       wday(date, week_start = 1),
       levels = 1:7,
       labels = weekday_labels_en
     ),
 
-    # Keep the manually entered weekday only as a quality-check field
+    # Keep the manually entered weekday only as a quality-check field.
     reported_day_of_week = factor(
       reported_day_of_week,
       levels = weekday_levels_fi,
@@ -117,7 +117,7 @@ sleep_diary <- df_raw |>
       ordered = TRUE
     ),
 
-    # Keep generic labels where coding is not yet fully documented
+    # Keep generic labels where coding is not yet fully documented.
     coffee = factor(
       coffee_code,
       levels = 0:3,
@@ -154,24 +154,18 @@ sleep_diary <- df_raw |>
   ) |>
   arrange(date)
 
-# Keep the legacy object name for downstream scripts
+# Keep the legacy object name for downstream scripts.
 df_clean <- sleep_diary
 
 cat("\n=== CLEAN DATASET SUMMARY ===\n")
 cat("Total observations:", nrow(df_clean), "\n")
-
-
-cat("Date range:", format(min(df_clean$date), "%Y-%m-%d"), "to",
-    format(max(df_clean$date), "%Y-%m-%d"), "\n")
-cat("Duration (days):", as.numeric(max(df_clean$date) - min(df_clean$date)), "\n")
-
 cat(
-  "Duration (days):",
-  as.numeric(max(df_clean$date) - min(df_clean$date)),
-  "\n"
+  "Date range:", format(min(df_clean$date), "%Y-%m-%d"), "to",
+  format(max(df_clean$date), "%Y-%m-%d"), "\n"
 )
+cat("Duration (days):", as.numeric(max(df_clean$date) - min(df_clean$date)), "\n")
 cat(
-  "Weekday mismatches:", 
+  "Weekday mismatches:",
   sum(df_clean$weekday_match == FALSE, na.rm = TRUE),
   "\n"
 )
