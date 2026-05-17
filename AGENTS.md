@@ -53,6 +53,13 @@ This repository contains R scripts for cleaning, joining, and analyzing sleep di
 - Keep outputs predictable: figures should go to `figures/variable_specific/<variable_name>/`. Avoid table/output directories unless there is a clear downstream use.
 - Use numbered figure names for the recommended figure set: `<variable>_figure1_main.png` for the main figure and `<variable>_figureS*.png` for supporting figures.
 
+## Future predictive modeling layer
+- A possible later extension is `scripts/predictive_models/`, focused on prediction rather than causal interpretation.
+- Do not create or modify predictive modeling scripts unless the user explicitly asks for that phase.
+- If requested later, keep predictive models separate from the variable-specific reporting scripts.
+- Use language such as "predictors", "associations", "out-of-sample performance", and "variable importance" rather than causal claims.
+- Prefer interpretable benchmarking first: regularized regression, random forest or gradient boosting, model comparison, variable importance, and partial-dependence or accumulated-local-effects style visualizations when appropriate.
+
 ## Cost-aware AI-assisted workflow
 - For small fixes, ask for one script and one issue at a time.
 - For new variables, copy the closest existing template and edit only the variable-specific parts.
