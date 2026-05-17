@@ -205,6 +205,19 @@ monthly_bedtime_summary <- dat_bedtime |>
   ungroup() |>
   mutate(share = round(share, 3))
 
+yearly_bedtime_summary <- dat_bedtime |>
+  mutate(year = factor(format(date, "%Y"))) |>
+  group_by(year, bedtime) |>
+  summarise(n = n(), .groups = "drop") |>
+  group_by(year) |>
+  mutate(share = n / sum(n)) |>
+  ungroup() |>
+  mutate(share = round(share, 3))
+
+yearly_bedtime_totals <- dat_bedtime |>
+  mutate(year = factor(format(date, "%Y"))) |>
+  count(year, name = "n_year")
+
 cat("\n========== SLEEP OUTCOMES BY BEDTIME ==========\n")
 print(bedtime_summary, n = Inf, width = Inf)
 
@@ -214,6 +227,7 @@ print(weekday_bedtime_summary, n = Inf, width = Inf)
 write_csv(bedtime_summary, file.path(output_dir, "bedtime_summary.csv"))
 write_csv(weekday_bedtime_summary, file.path(output_dir, "bedtime_by_weekday.csv"))
 write_csv(monthly_bedtime_summary, file.path(output_dir, "bedtime_by_month.csv"))
+write_csv(yearly_bedtime_summary, file.path(output_dir, "bedtime_by_year.csv"))
 
 # =============================================================================
 # VISUALIZATIONS
@@ -223,40 +237,53 @@ p_distribution <- bedtime_summary |>
   ggplot(aes(x = bedtime, y = share, fill = bedtime)) +
   geom_col(alpha = 0.85) +
   geom_text(
-    aes(label = scales::percent(share, accuracy = 1)),
-    vjust = -0.35,
-    size = 3.5,
+    aes(label = paste0(scales::percent(share, accuracy = 1), "\n(n=", n, ")")),
+    vjust = -0.4,
+    size = 3.2,
     color = col_dark_text
   ) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  scale_y_continuous(
+    labels = scales::percent_format(accuracy = 1),
+    expand = expansion(mult = c(0, 0.24))
+  ) +
   scale_fill_manual(
     values = make_palette(n_distinct(dat_bedtime$bedtime)),
     guide = "none"
   ) +
   labs(
-    title = "Distribution of bedtime",
-    subtitle = "Share of observed nights by reported bedtime category",
+    title = "Almost half of nights start before 23:00",
+    subtitle = paste0("Share of observed nights (N = ", nrow(dat_bedtime), ")"),
     x = NULL,
     y = "Share of nights"
   ) +
+  coord_cartesian(clip = "off") +
   theme_sleep()
 
 p_duration <- dat_bedtime |>
   ggplot(aes(x = bedtime, y = duration, fill = bedtime)) +
   geom_boxplot(alpha = 0.75, outlier.shape = NA) +
-  geom_jitter(width = 0.15, alpha = 0.12, size = 1.5, color = col_dark_text) +
-  stat_summary(fun = mean, geom = "point", shape = 18, size = 3, color = col_orange) +
+  geom_jitter(width = 0.14, alpha = 0.05, size = 0.85, color = col_dark_text) +
+  geom_label(
+    data = bedtime_summary,
+    aes(x = bedtime, y = 9.2, label = paste0("Median: ", median_sleep, " h")),
+    fill = "grey98",
+    alpha = 0.8,
+    linewidth = 0.08,
+    size = 2.7,
+    fontface = "plain",
+    color = col_dark_text
+  ) +
   scale_fill_manual(
     values = make_palette(n_distinct(dat_bedtime$bedtime)),
     guide = "none"
   ) +
   labs(
-    title = "Sleep duration by bedtime",
-    subtitle = "Dots show individual nights; diamonds show means",
+    title = "Later bedtimes are associated with shorter sleep",
+    subtitle = paste0("Boxplots, individual nights, and median sleep durations (N = ", nrow(dat_bedtime), ")"),
     x = NULL,
     y = outcome_label
   ) +
-  coord_cartesian(ylim = c(0, NA)) +
+  coord_cartesian(ylim = c(0, 11.2), clip = "off") +
   theme_sleep()
 
 p_mean_ci <- bedtime_summary |>
@@ -318,31 +345,30 @@ p_weekday_composition <- weekday_bedtime_summary |>
   ) +
   theme_sleep()
 
-p_monthly <- monthly_bedtime_summary |>
-  ggplot(aes(x = year_month, y = share, color = bedtime, group = bedtime)) +
-  geom_line(linewidth = 0.9, alpha = 0.85) +
-  geom_point(size = 1.8, alpha = 0.85) +
+p_over_time <- yearly_bedtime_summary |>
+  ggplot(aes(x = year, y = share, fill = bedtime)) +
+  geom_col(alpha = 0.92) +
+  geom_text(
+    data = yearly_bedtime_totals,
+    aes(x = year, y = 1.03, label = paste0("n=", n_year)),
+    inherit.aes = FALSE,
+    size = 3,
+    color = col_dark_text
+  ) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-  scale_color_manual(values = make_palette(n_distinct(dat_bedtime$bedtime))) +
+  scale_fill_manual(values = make_palette(n_distinct(dat_bedtime$bedtime))) +
   labs(
-    title = "Bedtime over time",
-    subtitle = "Monthly share of nights in each bedtime category",
+    title = "Bedtimes vary over time",
+    subtitle = "Yearly share of nights by bedtime category; labels show total nights per year",
     x = NULL,
     y = "Share of nights",
-    color = NULL
+    fill = NULL,
+    caption = "2017 and 2026 are partial years."
   ) +
-  theme_sleep() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  coord_cartesian(ylim = c(0, 1.08), clip = "off") +
+  theme_sleep()
 
-p_overview <- (p_distribution + p_duration) / (p_mean_ci + p_insomnia) / (p_short_sleep + p_weekday_composition) +
-  plot_layout(heights = c(1, 1, 1.1)) +
-  plot_annotation(
-    title = "Bedtime and sleep outcomes",
-    subtitle = "Bedtime distribution, sleep duration, insomnia, short sleep, and weekday composition"
-  )
-
-print(p_overview)
-print(p_monthly)
+print(p_over_time)
 
 save_plot <- function(plot, filename, width = 10, height = 6) {
   ggsave(
@@ -354,14 +380,31 @@ save_plot <- function(plot, filename, width = 10, height = 6) {
   )
 }
 
-save_plot(p_overview, "bedtime_overview.png", width = 14, height = 14)
-save_plot(p_distribution, "bedtime_distribution.png", width = 8, height = 6)
-save_plot(p_duration, "sleep_duration_by_bedtime.png", width = 8, height = 6)
-save_plot(p_mean_ci, "mean_sleep_by_bedtime.png", width = 8, height = 6)
-save_plot(p_insomnia, "insomnia_by_bedtime.png", width = 8, height = 6)
-save_plot(p_short_sleep, "short_sleep_by_bedtime.png", width = 8, height = 6)
-save_plot(p_weekday_composition, "bedtime_by_weekday.png", width = 10, height = 6)
-save_plot(p_monthly, "bedtime_over_time.png", width = 12, height = 6)
+save_plot_versions <- function(plot, filenames, width = 10, height = 6) {
+  purrr::walk(
+    filenames,
+    \(filename) save_plot(plot, filename, width = width, height = height)
+  )
+}
+
+save_plot_versions(
+  p_distribution,
+  c("bedtime_figureS4_distribution.png"),
+  width = 8,
+  height = 6
+)
+save_plot_versions(
+  p_duration,
+  c("bedtime_figureS5_sleep_duration_boxplot.png"),
+  width = 8,
+  height = 6
+)
+save_plot_versions(
+  p_over_time,
+  c("bedtime_figureS3_over_time.png"),
+  width = 10,
+  height = 6
+)
 
 # =============================================================================
 # MODEL DATA
@@ -555,6 +598,12 @@ bedtime_duration_results <- get_duration_results(models_duration) |>
     bedtime = factor(bedtime, levels = rev(levels(dat_model$bedtime)))
   )
 
+month_fe_duration_results <- bedtime_duration_results |>
+  filter(model == "Month FE") |>
+  mutate(
+    duration_label = paste0(if_else(estimate_minutes >= 0, "+", ""), round(estimate_minutes), " min")
+  )
+
 write_csv(bedtime_duration_results, file.path(output_dir, "bedtime_duration_coefficients.csv"))
 
 p_duration_coef <- bedtime_duration_results |>
@@ -562,14 +611,13 @@ p_duration_coef <- bedtime_duration_results |>
     aes(
       y = bedtime,
       x = estimate_minutes,
-      xmin = ci_low_minutes,
-      xmax = ci_high_minutes,
       color = model
     )
   ) +
-  geom_linerange(
-    linewidth = 2,
-    alpha = 0.6,
+  geom_segment(
+    aes(x = ci_low_minutes, xend = ci_high_minutes, y = bedtime, yend = bedtime),
+    linewidth = 1.1,
+    alpha = 0.65,
     position = position_dodge(width = 0.55)
   ) +
   geom_point(
@@ -589,9 +637,9 @@ p_duration_coef <- bedtime_duration_results |>
     breaks = scales::breaks_pretty(n = 6)
   ) +
   labs(
-    title = "Bedtime differences in sleep duration",
-    subtitle = paste0("Estimated difference relative to ", reference_bedtime),
-    x = "Difference in sleep duration",
+    title = "Model comparison for sleep-duration differences",
+    subtitle = paste0("Estimates relative to ", reference_bedtime, "; negative values indicate shorter sleep"),
+    x = "Difference in sleep duration (minutes)",
     y = NULL,
     color = NULL
   ) +
@@ -602,7 +650,12 @@ p_duration_coef <- bedtime_duration_results |>
   )
 
 print(p_duration_coef)
-save_plot(p_duration_coef, "bedtime_duration_coefficients.png", width = 10, height = 6)
+save_plot_versions(
+  p_duration_coef,
+  c("bedtime_figureS1_duration_model_comparison.png", "bedtime_duration_coefficients.png"),
+  width = 10,
+  height = 6
+)
 
 if (length(models_insomnia) > 0) {
   get_insomnia_results <- function(model_results) {
@@ -642,14 +695,12 @@ if (length(models_insomnia) > 0) {
     ggplot(
       aes(
         y = bedtime,
-        x = odds_ratio,
-        xmin = ci_low,
-        xmax = ci_high,
         color = model
       )
     ) +
     geom_vline(xintercept = 1, linewidth = 0.3, linetype = "dashed") +
     geom_pointrange(
+      aes(x = odds_ratio, xmin = ci_low, xmax = ci_high),
       position = position_dodge(width = 0.55),
       linewidth = 0.7
     ) +
@@ -666,8 +717,12 @@ if (length(models_insomnia) > 0) {
       na.translate = FALSE
     ) +
     labs(
-      title = "Bedtime differences in insomnia probability",
-      subtitle = paste0("Odds ratios relative to ", reference_bedtime),
+      title = "Model comparison for insomnia odds ratios",
+      subtitle = paste0(
+        "Odds ratios relative to ",
+        reference_bedtime,
+        "; values above 1 indicate higher odds"
+      ),
       x = "Odds ratio, log scale",
       y = NULL,
       color = NULL
@@ -679,7 +734,12 @@ if (length(models_insomnia) > 0) {
     )
 
   print(p_insomnia_coef)
-  save_plot(p_insomnia_coef, "bedtime_insomnia_odds_ratios.png", width = 10, height = 6)
+  save_plot_versions(
+    p_insomnia_coef,
+    c("bedtime_figureS2_insomnia_model_comparison.png", "bedtime_insomnia_odds_ratios.png"),
+    width = 10,
+    height = 6
+  )
 }
 
 # =============================================================================
@@ -713,21 +773,8 @@ pred_duration <- prediction_grid |>
 
 write_csv(pred_duration, file.path(output_dir, "bedtime_predicted_sleep_duration.csv"))
 
-p_pred_duration <- pred_duration |>
-  ggplot(aes(x = bedtime, y = predicted_duration, group = 1)) +
-  geom_line(linewidth = 1, color = col_dark_blue) +
-  geom_point(size = 3, color = col_orange) +
-  labs(
-    title = "Adjusted predicted sleep duration by bedtime",
-    subtitle = "Predictions from the month fixed-effect model; other variables held at modal values",
-    x = NULL,
-    y = "Predicted sleep duration (hours)"
-  ) +
-  coord_cartesian(ylim = c(0, NA)) +
-  theme_sleep()
-
-print(p_pred_duration)
-save_plot(p_pred_duration, "bedtime_predicted_sleep_duration.png", width = 8, height = 6)
+p_insomnia_main <- p_insomnia
+pred_insomnia <- NULL
 
 if (length(models_insomnia) > 0) {
   preferred_insomnia_model_name <- c(
@@ -739,42 +786,261 @@ if (length(models_insomnia) > 0) {
 
   preferred_insomnia_model <- models_insomnia[[preferred_insomnia_model_name]]
 
-  pred_insomnia <- prediction_grid |>
-    mutate(
-      predicted_insomnia = tryCatch(
-        predict(
-          preferred_insomnia_model,
-          newdata = as.data.frame(pick(everything())),
-          type = "response"
-        ) |>
-          as.numeric(),
-        error = \(e) {
-          warning("Insomnia prediction failed: ", conditionMessage(e))
-          rep(NA_real_, nrow(prediction_grid))
-        }
-      ),
-      model = preferred_insomnia_model_name
-    ) |>
-    select(bedtime, predicted_insomnia, model)
+  insomnia_pred_link <- tryCatch(
+    predict(
+      preferred_insomnia_model,
+      newdata = as.data.frame(prediction_grid),
+      type = "link"
+    ),
+    error = \(e) {
+      warning("Insomnia prediction failed: ", conditionMessage(e))
+      NULL
+    }
+  )
+
+  if (!is.null(insomnia_pred_link)) {
+    insomnia_design <- model.matrix(
+      ~ bedtime + coffee + stress + health + exercise + day_of_week,
+      data = prediction_grid
+    )
+    colnames(insomnia_design) <- colnames(insomnia_design) |>
+      str_replace("^bedtime", "bedtime::") |>
+      str_replace("^coffee", "coffee::") |>
+      str_replace("^stress", "stress::") |>
+      str_replace("^health", "health::") |>
+      str_replace("^exercise", "exercise::") |>
+      str_replace("^day_of_week", "day_of_week::")
+
+    insomnia_beta <- coef(preferred_insomnia_model)
+    insomnia_vcov <- vcov(preferred_insomnia_model)
+
+    shared_terms <- intersect(colnames(insomnia_design), names(insomnia_beta))
+
+    if (length(shared_terms) > 0) {
+      insomnia_design <- insomnia_design[, shared_terms, drop = FALSE]
+      insomnia_beta <- insomnia_beta[shared_terms]
+      insomnia_vcov <- insomnia_vcov[shared_terms, shared_terms, drop = FALSE]
+
+      insomnia_link <- as.numeric(insomnia_pred_link)
+      insomnia_se_link <- sqrt(
+        rowSums((insomnia_design %*% insomnia_vcov) * insomnia_design)
+      )
+
+      pred_insomnia <- tibble(
+        bedtime = prediction_grid$bedtime,
+        predicted_insomnia = plogis(insomnia_link),
+        ci_low = plogis(insomnia_link - 1.96 * insomnia_se_link),
+        ci_high = plogis(insomnia_link + 1.96 * insomnia_se_link),
+        model = preferred_insomnia_model_name
+      ) |>
+        select(
+          bedtime,
+          predicted_insomnia,
+          ci_low,
+          ci_high,
+          model
+        )
+    } else {
+      pred_insomnia <- NULL
+    }
+  } else {
+    pred_insomnia <- NULL
+  }
+
+  if (!is.null(pred_insomnia)) {
+    p_insomnia_main <- pred_insomnia |>
+      ggplot(aes(x = bedtime, y = predicted_insomnia)) +
+      geom_linerange(aes(ymin = ci_low, ymax = ci_high), linewidth = 0.9, color = col_dark_blue) +
+      geom_point(size = 2.7, color = col_orange) +
+      geom_text(
+        aes(label = scales::percent(predicted_insomnia, accuracy = 1)),
+        vjust = -1.1,
+        nudge_x = 0.18,
+        color = col_dark_text,
+        size = 3.1,
+        fontface = "bold"
+      ) +
+      scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+      labs(
+        title = "Insomnia is more common after later bedtimes",
+        subtitle = "Model-based predicted probabilities; uncertainty remains substantial",
+        x = NULL,
+        y = "Predicted probability"
+      ) +
+      coord_cartesian(clip = "off") +
+      theme_sleep()
+  } else {
+    pred_insomnia <- prediction_grid |>
+      mutate(
+        predicted_insomnia = tryCatch(
+          predict(
+            preferred_insomnia_model,
+            newdata = as.data.frame(pick(everything())),
+            type = "response"
+          ) |>
+            as.numeric(),
+          error = \(e) {
+            warning("Insomnia prediction failed: ", conditionMessage(e))
+            rep(NA_real_, nrow(prediction_grid))
+          }
+        ),
+        ci_low = NA_real_,
+        ci_high = NA_real_,
+        model = preferred_insomnia_model_name
+      ) |>
+      select(bedtime, predicted_insomnia, ci_low, ci_high, model)
+
+    p_insomnia_main <- pred_insomnia |>
+      ggplot(aes(x = bedtime, y = predicted_insomnia)) +
+      geom_point(size = 2.7, color = col_orange) +
+      geom_text(
+        aes(label = scales::percent(predicted_insomnia, accuracy = 1)),
+        vjust = -0.8,
+        nudge_x = 0.18,
+        color = col_dark_text,
+        size = 3.1,
+        fontface = "bold"
+      ) +
+      scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+      labs(
+        title = "Insomnia is more common after later bedtimes",
+        subtitle = paste0(
+          "Model-based predicted probabilities; uncertainty remains substantial",
+          " (point estimates shown; confidence intervals unavailable)"
+        ),
+        x = NULL,
+        y = "Predicted probability"
+      ) +
+      coord_cartesian(clip = "off") +
+      theme_sleep()
+  }
 
   write_csv(pred_insomnia, file.path(output_dir, "bedtime_predicted_insomnia.csv"))
-
-  p_pred_insomnia <- pred_insomnia |>
-    ggplot(aes(x = bedtime, y = predicted_insomnia, group = 1)) +
-    geom_line(linewidth = 1, color = col_dark_blue) +
-    geom_point(size = 3, color = col_orange) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-    labs(
-      title = "Adjusted predicted probability of insomnia by bedtime",
-      subtitle = paste0("Predictions from the ", preferred_insomnia_model_name, " model; other variables held at modal values"),
-      x = NULL,
-      y = "Predicted probability"
-    ) +
-    theme_sleep()
-
-  print(p_pred_insomnia)
-  save_plot(p_pred_insomnia, "bedtime_predicted_insomnia.png", width = 8, height = 6)
 }
+
+p_duration_main <- bedtime_duration_results |>
+  filter(model == "Month FE") |>
+  ggplot(
+    aes(
+      y = bedtime,
+      x = estimate_minutes,
+      xmin = ci_low_minutes,
+      xmax = ci_high_minutes
+    )
+  ) +
+  geom_segment(
+    aes(x = ci_low_minutes, xend = ci_high_minutes, yend = bedtime),
+    linewidth = 1.1,
+    color = col_dark_blue
+  ) +
+  geom_point(size = 2.7, color = col_orange) +
+  geom_text(
+    data = month_fe_duration_results,
+    aes(label = duration_label),
+    nudge_x = 9,
+    nudge_y = 0.12,
+    color = col_dark_text,
+    size = 3.1,
+    fontface = "bold"
+  ) +
+  geom_vline(xintercept = 0, linewidth = 0.3, linetype = "dashed") +
+  scale_x_continuous(
+    labels = \(x) paste0(round(x), " min"),
+    breaks = scales::breaks_pretty(n = 6)
+  ) +
+  labs(
+    title = "After-midnight bedtimes show the largest adjusted sleep loss",
+    subtitle = "Month fixed-effect estimates relative to before 23:00; negative values mean shorter sleep",
+    x = "Difference in sleep duration (minutes)",
+    y = NULL
+  ) +
+  coord_cartesian(clip = "off") +
+  theme_sleep() +
+  theme(panel.grid.major.x = element_line(color = "grey90"))
+
+top_row <- p_distribution + p_duration + plot_spacer() +
+  plot_layout(widths = c(1, 1, 0.08))
+
+bottom_row <- p_duration_main + p_insomnia_main + plot_spacer() +
+  plot_layout(widths = c(1, 1, 0.08))
+
+p_main <- top_row / bottom_row +
+  plot_annotation(
+    title = "Later bedtimes are associated with shorter sleep and more insomnia",
+    subtitle = "Sleep diary associations across bedtime categories; uncertainty intervals shown for model-based estimates",
+    tag_levels = "A"
+  )
+
+print(p_main)
+save_plot_versions(
+  p_main,
+  c("bedtime_figure1_main.png"),
+  width = 14,
+  height = 10
+)
+
+# Compact reporting values for publication-facing summaries.
+bedtime_share_map <- bedtime_summary |>
+  transmute(
+    bedtime,
+    metric = case_when(
+      bedtime == "Before 23:00" ~ "share_before_23_00",
+      bedtime == "23:00-00:00" ~ "share_23_00_00_00",
+      bedtime == "After 00:00" ~ "share_after_00_00",
+      TRUE ~ paste0("share_", str_replace_all(str_to_lower(bedtime), "[^a-z0-9]+", "_"))
+    ),
+    value = share
+  )
+
+median_by_bedtime <- bedtime_summary |>
+  transmute(
+    metric = "median_sleep_duration_hours",
+    category = bedtime,
+    value = median_sleep
+  )
+
+duration_diff_by_bedtime <- tibble(
+  bedtime = levels(dat_model$bedtime)
+) |>
+  left_join(
+    month_fe_duration_results |>
+      select(bedtime, estimate_minutes),
+    by = "bedtime"
+  ) |>
+  mutate(
+    estimate_minutes = replace_na(estimate_minutes, 0),
+    metric = "month_fe_sleep_duration_difference_minutes",
+    category = bedtime,
+    value = round(estimate_minutes, 2)
+  ) |>
+  select(metric, category, value)
+
+insomnia_prob_by_bedtime <- if (!is.null(pred_insomnia)) {
+  pred_insomnia |>
+    transmute(
+      metric = "predicted_insomnia_probability",
+      category = bedtime,
+      value = round(predicted_insomnia, 4)
+    )
+} else {
+  tibble(
+    metric = "predicted_insomnia_probability",
+    category = levels(dat_model$bedtime),
+    value = NA_real_
+  )
+}
+
+key_findings <- bind_rows(
+  tibble(metric = "total_n", category = "all", value = nrow(dat_bedtime)),
+  bedtime_share_map |>
+    mutate(category = bedtime) |>
+    select(metric, category, value),
+  median_by_bedtime,
+  duration_diff_by_bedtime,
+  insomnia_prob_by_bedtime
+)
+
+write_csv(key_findings, file.path(output_dir, "bedtime_key_findings.csv"))
 
 # =============================================================================
 # REPORTING SUMMARY
@@ -786,7 +1052,10 @@ cat(
   "fixed-effect models for sleep duration and any recorded insomnia.\n"
 )
 cat("Reference bedtime:", reference_bedtime, "\n")
-cat("Main overview figure saved to:", file.path(figure_dir, "bedtime_overview.png"), "\n")
-cat("Duration coefficient figure saved to:", file.path(figure_dir, "bedtime_duration_coefficients.png"), "\n")
-cat("Adjusted duration prediction saved to:", file.path(figure_dir, "bedtime_predicted_sleep_duration.png"), "\n")
+cat("Main figure saved to:", file.path(figure_dir, "bedtime_figure1_main.png"), "\n")
+cat("Supporting duration coefficient figure saved to:", file.path(figure_dir, "bedtime_duration_coefficients.png"), "\n")
+cat("Supporting insomnia odds-ratio figure saved to:", file.path(figure_dir, "bedtime_insomnia_odds_ratios.png"), "\n")
+cat("Supporting bedtime distribution figure saved to:", file.path(figure_dir, "bedtime_figureS4_distribution.png"), "\n")
+cat("Supporting sleep-duration figure saved to:", file.path(figure_dir, "bedtime_figureS5_sleep_duration_boxplot.png"), "\n")
+cat("Supporting bedtime-over-time figure saved to:", file.path(figure_dir, "bedtime_figureS3_over_time.png"), "\n")
 cat("Tables saved to:", output_dir, "\n")
