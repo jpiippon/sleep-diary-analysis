@@ -691,15 +691,18 @@ p_month_fe_odds <- month_fe_or_results |>
   geom_vline(xintercept = 1, linewidth = 0.3, linetype = "dashed") +
   geom_linerange(linewidth = 1.1, color = col_dark_blue, alpha = 0.85) +
   geom_point(size = 2.4, color = col_orange) +
-  geom_text(
-    aes(label = direct_label),
-    nudge_y = 0.18,
+  geom_label(
+    aes(x = ci_high * 1.08, label = direct_label),
+    hjust = 0,
     size = 3,
+    label.size = 0.15,
+    fill = "white",
     color = col_dark_text
   ) +
   scale_x_log10(
     labels = scales::number_format(accuracy = 0.1),
-    breaks = c(0.25, 0.5, 1, 2, 4, 8)
+    breaks = c(0.25, 0.5, 1, 2, 4, 8),
+    expand = expansion(mult = c(0.03, 0.28))
   ) +
   labs(
     title = "Adjusted associations with insomnia are uncertain",
@@ -707,6 +710,7 @@ p_month_fe_odds <- month_fe_or_results |>
     x = "Odds ratio, log scale",
     y = NULL
   ) +
+  coord_cartesian(clip = "off") +
   theme_sleep() +
   theme(panel.grid.major.x = element_line(color = "grey90"))
 
@@ -883,6 +887,10 @@ save_plot(p_duration, "insomnia_figureS6_sleep_duration_boxplot.png", width = 8,
 save_plot(p_weekday, "insomnia_figureS7_by_weekday.png", width = 10, height = 6)
 save_plot(p_sleep_band, "insomnia_figureS8_by_sleep_duration_band.png", width = 8, height = 6)
 save_plot(p_behavior, "insomnia_figureS9_by_behavioral_factors.png", width = 12, height = 8)
+
+# Bedtime-consistent numbered aliases for core descriptive figures.
+save_plot(p_distribution, "insomnia_figureS4_distribution.png", width = 8, height = 6)
+save_plot(p_duration, "insomnia_figureS5_sleep_duration_boxplot.png", width = 8, height = 6)
 
 # Backward-compatible file names
 save_plot(p_main, "insomnia_overview.png", width = 14, height = 10)

@@ -532,16 +532,21 @@ p_duration_coef_main <- month_fe_duration_results |>
   ggplot(aes(y = weekday, x = estimate_minutes, xmin = ci_low_minutes, xmax = ci_high_minutes)) +
   geom_linerange(linewidth = 1.2, color = col_dark_blue, alpha = 0.9) +
   geom_point(size = 2.5, color = col_orange) +
-  geom_text(
-    aes(label = label),
-    nudge_y = 0.18,
+  geom_label(
+    data = month_fe_duration_results,
+    aes(y = weekday, x = ci_high_minutes + 2, label = label),
+    inherit.aes = FALSE,
+    hjust = 0,
     size = 3,
+    label.size = 0.15,
+    fill = "white",
     color = col_dark_text
   ) +
   geom_vline(xintercept = 0, linewidth = 0.3, linetype = "dashed") +
   scale_x_continuous(
     labels = \(x) paste0(round(x), " min"),
-    breaks = scales::breaks_pretty(n = 6)
+    breaks = scales::breaks_pretty(n = 6),
+    expand = expansion(mult = c(0.03, 0.22))
   ) +
   labs(
     title = paste0("Largest adjusted weekday difference is about ", round(max_abs_month_fe), " minutes"),
@@ -549,6 +554,7 @@ p_duration_coef_main <- month_fe_duration_results |>
     x = "Difference in sleep duration (minutes)",
     y = NULL
   ) +
+  coord_cartesian(clip = "off") +
   theme_sleep() +
   theme(panel.grid.major.x = element_line(color = "grey90"))
 
@@ -706,6 +712,10 @@ save_plot(p_distribution, "weekday_figureS3_distribution.png", width = 10, heigh
 save_plot(p_duration, "weekday_figureS4_sleep_duration_boxplot.png", width = 10, height = 6)
 save_plot(p_mean_ci, "weekday_figureS5_mean_sleep_ci.png", width = 10, height = 6)
 save_plot(p_insomnia, "weekday_figureS6_insomnia_rate.png", width = 10, height = 6)
+
+# Bedtime-consistent numbered aliases for core descriptive figures.
+save_plot(p_distribution, "weekday_figureS4_distribution.png", width = 10, height = 6)
+save_plot(p_duration, "weekday_figureS5_sleep_duration_boxplot.png", width = 10, height = 6)
 
 # Backward-compatible file names
 save_plot(p_main, "weekday_combined.png", width = 14, height = 10)
