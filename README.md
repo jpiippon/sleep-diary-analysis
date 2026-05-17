@@ -24,7 +24,7 @@ The empirical focus is on variation across nights rather than differences betwee
 - `scripts/variable_specific/`: focused reporting scripts for individual variables
 - `figures/`: generated figures from the main workflow
 - `figures/variable_specific/`: generated figures from variable-specific scripts
-- `outputs/`: model summaries and other analysis outputs
+- `outputs/`: optional model summaries and other analysis outputs, used only when a script has a clear need for reusable tables
 - `archive/`: older exploratory material
 - `projects/`: additional project-specific work
 
@@ -57,12 +57,18 @@ Run the main scripts in numeric order.
 
 Focused reporting scripts are stored in `scripts/variable_specific/`. These scripts are not part of the required numbered pipeline. They are intended for deeper analysis of one variable at a time while keeping a consistent structure across outputs.
 
-For example:
+Current examples include:
 
-- `scripts/variable_specific/weekday.R` analyzes sleep duration and insomnia by day of week.
-- Generated figures are saved to `figures/variable_specific/weekday/`.
+- `scripts/variable_specific/bedtime.R`
+- `scripts/variable_specific/weekday.R`
+- `scripts/variable_specific/insomnia.R`
+- `scripts/variable_specific/exercise.R`
 
-The same structure can be adapted for other categorical, ordered, or numeric variables. Categorical variables typically use grouped summaries, boxplots, and factor-based models. Numeric variables typically use scatterplots, binned summaries, and linear or flexible functional forms.
+The recommended output from each variable-specific script is a numbered figure set saved under `figures/variable_specific/<variable_name>/`. The main figure should use the name `<variable>_figure1_main.png`; supporting figures should use `<variable>_figureS*.png`.
+
+Variable-specific scripts should print useful summaries and model output to the console. They should not create CSV tables or `outputs/variable_specific/<variable_name>/` files unless reusable tables are explicitly needed. This keeps the workflow lighter and reduces unnecessary maintenance when using AI-assisted coding.
+
+The same structure can be adapted for other categorical, ordered, or numeric variables. Categorical variables typically use grouped summaries, boxplots, category-level rates, and factor-based models. Numeric variables typically use scatterplots, binned summaries, and linear or flexible functional forms.
 
 ## Methods currently implemented
 
