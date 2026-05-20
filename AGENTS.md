@@ -28,6 +28,13 @@ This repository contains R scripts for cleaning, joining, and analyzing sleep di
 - Preserve the diary date convention: the date refers to the exposure day and the night that starts on that date. For example, sleep entered on Wednesday morning belongs to Tuesday if Tuesday contains the relevant bedtime, coffee, exercise, stress, and other exposures.
 - Do not shift diary dates forward to the wake-up date unless explicitly asked. Sensor observations after midnight should remain assigned to the previous calendar day when they belong to the same night window.
 
+## Temporal interpretation and lagged sleep
+- Previous sleep can affect current-day behaviors and the following night of sleep. This is especially relevant for variables such as coffee, where coffee intake may respond to poor sleep on the previous night.
+- Lagged sleep variables such as previous-night sleep duration and two-night sleep debt may be useful sensitivity checks, controls, or descriptive mechanisms.
+- Do not add lagged sleep controls automatically to every variable-specific script. Add them only when the user asks, when the research question clearly requires them, or as a clearly labelled sensitivity analysis.
+- When using lags, preserve the diary date convention: `lag(duration)` refers to the previous diary date, which is the previous exposure day/night in the ordered diary series.
+- Avoid interpreting models with lagged sleep as causal unless the timing and assumptions are explicitly discussed.
+
 ## Editing rules
 - When editing a script, change only that script unless explicitly asked to update others.
 - If a change may break another script, explain that clearly before or within the edit.
