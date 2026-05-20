@@ -25,6 +25,8 @@ This repository contains R scripts for cleaning, joining, and analyzing sleep di
 - Preserve both raw coded variables and readable labeled variables when useful for analysis.
 - Derive weekday from date variables when possible instead of relying on manually entered weekday fields.
 - Keep date and time handling explicit and reproducible.
+- Preserve the diary date convention: the date refers to the exposure day and the night that starts on that date. For example, sleep entered on Wednesday morning belongs to Tuesday if Tuesday contains the relevant bedtime, coffee, exercise, stress, and other exposures.
+- Do not shift diary dates forward to the wake-up date unless explicitly asked. Sensor observations after midnight should remain assigned to the previous calendar day when they belong to the same night window.
 
 ## Editing rules
 - When editing a script, change only that script unless explicitly asked to update others.
