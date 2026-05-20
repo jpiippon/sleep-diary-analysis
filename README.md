@@ -17,6 +17,12 @@ The project is based on within-person longitudinal data. The analytical workflow
 
 The empirical focus is on variation across nights rather than differences between individuals.
 
+## Date convention
+
+The diary date refers to the exposure day and the night that starts on that date. For example, sleep reported on Wednesday morning is recorded under Tuesday if the relevant bedtime, coffee intake, exercise, stress, and other diary exposures occurred on Tuesday.
+
+This convention is intentional: behavioral variables are interpreted as same-day predictors or correlates of the following night of sleep. Sensor observations are aligned to the same convention by assigning observations from 00:00-07:59 to the previous calendar day.
+
 ## Repository structure
 
 - `data/raw/`: raw input files
