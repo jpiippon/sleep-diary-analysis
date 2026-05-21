@@ -1,113 +1,163 @@
 # Sleep diary analysis
 
-This repository contains a longitudinal sleep diary project that combines self-tracked sleep records with nightly bedroom sensor data on CO2, temperature, and humidity.
+This repository contains an analysis of my long-term sleep diary. The data cover about 3,000 nights and include both daily notes and bedroom sensor data.
 
-The aim is to study how behavioral, temporal, and environmental factors are associated with night-to-night variation in sleep duration and insomnia-related outcomes. The repository is organized as a reproducible analysis workflow, from raw data cleaning to descriptive analysis, regression modeling, and variable-specific reporting.
+The main goal is simple: I want to understand which things are linked to better or worse sleep. Examples include bedtime, weekday, coffee, exercise, stress, illness, bedroom temperature, CO2, and humidity.
 
-## Study design
+The project is also a coding and data-visualization portfolio. The aim is to build clear, reproducible R code and figures that can later be used in reports, presentations, or public posts.
 
-The project is based on within-person longitudinal data. The analytical workflow combines:
+## What the data include
 
-- sleep diary entries
-- nightly environmental sensor measurements
-- reproducible data cleaning and variable construction
-- descriptive visualization
-- regression-based modeling
-- variable-specific reporting analyses
+The project uses two main sources of data:
 
-The empirical focus is on variation across nights rather than differences between individuals.
+- my sleep diary, where I record sleep duration and daily factors such as coffee, exercise, stress, illness, bedtime, and insomnia
+- bedroom sensor data, where temperature, CO2, and humidity are measured during the night
 
-## Date convention
+The focus is on changes from night to night within the same person. This means the project does not compare different people. It asks, for example, whether my sleep is different on nights after coffee, late bedtime, exercise, stress, or high bedroom temperature.
 
-The diary date refers to the exposure day and the night that starts on that date. For example, sleep reported on Wednesday morning is recorded under Tuesday if the relevant bedtime, coffee intake, exercise, stress, and other diary exposures occurred on Tuesday.
+## Important date convention
 
-This convention is intentional: behavioral variables are interpreted as same-day predictors or correlates of the following night of sleep. Sensor observations are aligned to the same convention by assigning observations from 00:00-07:59 to the previous calendar day.
+The diary date means the day before the sleep period ends. For example, if I wake up on Wednesday morning, the sleep is recorded under Tuesday when Tuesday was the day with the relevant bedtime, coffee, exercise, and stress.
+
+This is intentional. It keeps daily factors and the following night of sleep on the same diary date.
+
+The sensor data use the same idea. Sensor readings after midnight, for example 00:00-07:59, are assigned to the previous calendar day because they still belong to the same night.
 
 ## Repository structure
 
-- `data/raw/`: raw input files
-- `scripts/`: main data cleaning, joining, descriptive, and modeling scripts
-- `scripts/variable_specific/`: focused reporting scripts for individual variables
-- `figures/`: generated figures from the main workflow
-- `figures/variable_specific/`: generated figures from variable-specific scripts
-- `outputs/`: optional model summaries and other analysis outputs, used only when a script has a clear need for reusable tables
-- `archive/`: older exploratory material
+- `data/raw/`: original input files
+- `scripts/`: main R scripts for loading, cleaning, joining, plotting, and modeling the data
+- `scripts/variable_specific/`: focused scripts that study one variable at a time
+- `figures/`: generated figures
+- `figures/variable_specific/`: figures from the one-variable scripts
+- `outputs/`: optional outputs, used only when reusable tables are needed
+- `archive/`: older exploratory work
 - `projects/`: additional project-specific work
 
-## Analysis workflow
+## Main analysis workflow
 
-Run the main scripts in numeric order.
+The main scripts are designed to run in numeric order.
 
 1. `scripts/01_load_main_data.R`  
-   Loads and cleans the sleep diary data.
+   Loads and cleans the sleep diary.
 
 2. `scripts/02_load_co2_temp_data.R`  
-   Loads and aggregates nightly sensor data.
+   Loads the bedroom sensor data and creates night-level summaries.
 
 3. `scripts/03_join_relevant_data.R`  
-   Joins sleep diary data with nightly sensor summaries.
+   Combines the sleep diary with the sensor data.
 
 4. `scripts/04_descriptives_and_plots.R`  
-   Produces descriptive summaries and figures.
+   Creates general summary figures and descriptive results.
 
 5. `scripts/05_models.R`  
-   Fits baseline regression models for sleep duration and insomnia.
+   Runs baseline models for sleep duration and insomnia.
 
 6. `scripts/06_fixed_effects_models.R`  
-   Extends the modeling strategy with time fixed effects and sensor-based specifications.
+   Runs models that compare nights within the same time period.
 
 7. `scripts/99_smoke_test.R`  
-   Runs a lightweight validation check after code changes.
+   Checks that the main data pipeline still runs after code changes.
 
-## Variable-specific reporting scripts
+The main pipeline can also be run with:
 
-Focused reporting scripts are stored in `scripts/variable_specific/`. These scripts are not part of the required numbered pipeline. They are intended for deeper analysis of one variable at a time while keeping a consistent structure across outputs.
+```r
+source("scripts/run_core_pipeline.R")
+```
+
+## One-variable analyses
+
+The most important part of the project is the set of focused scripts in `scripts/variable_specific/`. Each script studies one variable or one closely related theme.
 
 Current examples include:
 
-- `scripts/variable_specific/bedtime.R`
-- `scripts/variable_specific/weekday.R`
-- `scripts/variable_specific/insomnia.R`
-- `scripts/variable_specific/exercise.R`
+- `bedtime.R`: bedtime and sleep
+- `weekday.R`: weekday differences in sleep
+- `insomnia.R`: insomnia patterns
+- `exercise.R`: exercise and sleep
+- `temperature.R`: bedroom temperature and sleep
+- `coffee.R`: coffee, previous-night sleep, and same-night sleep
+- `coffee_relationships.R`: coffee/no coffee, bedtime, exercise, and context checks
 
-The recommended output from each variable-specific script is a numbered figure set saved under `figures/variable_specific/<variable_name>/`. The main figure should use the name `<variable>_figure1_main.png`; supporting figures should use `<variable>_figureS*.png`.
+Each one-variable script usually creates:
 
-Variable-specific scripts should print useful summaries and model output to the console. They should not create CSV tables or `outputs/variable_specific/<variable_name>/` files unless reusable tables are explicitly needed. This keeps the workflow lighter and reduces unnecessary maintenance when using AI-assisted coding.
+- one main figure
+- a small set of supporting figures
+- simple model results printed to the console
+- sensitivity checks when they are useful
 
-The same structure can be adapted for other categorical, ordered, or numeric variables. Categorical variables typically use grouped summaries, boxplots, category-level rates, and factor-based models. Numeric variables typically use scatterplots, binned summaries, and linear or flexible functional forms.
+The main figure is named like this:
 
-## Methods currently implemented
+```text
+<variable>_figure1_main.png
+```
 
-The repository currently includes:
+Supporting figures are named like this:
 
-- cleaning and harmonizing raw sleep diary data
-- parsing and aggregating nightly sensor observations
-- date-based joining of diary and sensor data
-- descriptive analysis of sleep patterns
-- baseline regression models
-- time fixed-effects models for within-series analysis
-- variable-specific reporting scripts for focused interpretation
+```text
+<variable>_figureS*.png
+```
 
-## Reproducibility
+For example:
 
-The repository is designed as a script-based workflow. Raw data are treated as immutable, and analysis-ready objects are created through the scripts in `scripts/`.
+```text
+coffee_figure1_main.png
+coffee_figureS20_context_bedtime.png
+```
 
-Because the project uses personal tracking data, raw input files may not always be suitable for public redistribution. The code structure is therefore intended to keep the analytical workflow transparent and reproducible even when data access is restricted.
+The one-variable scripts can be run with:
 
-## Current status
+```r
+source("scripts/run_variable_specific_reports.R")
+```
 
-The repository currently supports:
+Or one script at a time, for example:
 
-- data preparation
-- descriptive analysis
-- baseline modeling
-- fixed-effects extensions for within-person inference
-- variable-specific reporting analyses
+```bash
+Rscript scripts/variable_specific/coffee.R
+Rscript scripts/variable_specific/temperature.R
+```
 
-Ongoing work focuses on improving model specification, validation, and presentation of results.
+## Modeling approach
+
+The models are meant to support interpretation, not to prove cause and effect.
+
+The project uses three common model layers:
+
+- raw models, which show the simple association
+- adjusted models, which include other diary variables
+- month fixed-effect models, which compare nights within the same year-month period
+
+Some scripts also include sensitivity checks. For example, the coffee analysis checks whether coffee is related to sleep after controlling for previous-night sleep. This is important because coffee may be a response to poor sleep, not only a possible cause of poor sleep.
+
+The wording in the project should therefore stay careful. It is better to write:
+
+> Coffee is associated with shorter sleep on some nights.
+
+than:
+
+> Coffee causes shorter sleep.
+
+## Current focus
+
+The current focus is to build high-quality one-variable analyses. The goal is that each important variable has:
+
+- a clear research question
+- a strong main figure
+- useful supporting figures
+- simple but informative models
+- careful interpretation
+
+Later, the project may add a separate predictive-modeling section. That would ask which variables best predict sleep duration or insomnia. This would be kept separate from the one-variable reports.
+
+## Reproducibility and data privacy
+
+The code is meant to make the analysis easy to rerun. Raw data are kept separate from the analysis scripts, and the scripts create the analysis-ready data step by step.
+
+Because the project uses personal tracking data, raw data may not be suitable for public sharing. The code is still organized so that the analysis logic is clear and reproducible when the data are available.
 
 ## Author
 
 Johannes Piipponen
 
-Quantitative research workflow for sleep diary and environmental data analysis.
+R-based sleep diary and bedroom sensor data analysis.
