@@ -138,24 +138,6 @@ than:
 
 > Coffee causes shorter sleep.
 
-## Current focus
-
-The current focus is to build high-quality one-variable analyses. The goal is that each important variable has:
-
-- a clear research question
-- a strong main figure
-- useful supporting figures
-- simple but informative models
-- careful interpretation
-
-Later, the project may add a separate predictive-modeling section. That would ask which variables best predict sleep duration or insomnia. This would be kept separate from the one-variable reports.
-
-## Reproducibility and data privacy
-
-The code is meant to make the analysis easy to rerun. Raw data are kept separate from the analysis scripts, and the scripts create the analysis-ready data step by step.
-
-Because the project uses personal tracking data, raw data may not be suitable for public sharing. The code is still organized so that the analysis logic is clear and reproducible when the data are available.
-
 ## Author
 
 Johannes Piipponen
