@@ -17,7 +17,8 @@ available_reports <- c(
   "insomnia",
   "exercise",
   "temperature",
-  "coffee"
+  "coffee",
+  "coffee_relationships"
 )
 
 if (!exists("reports_to_run")) {
