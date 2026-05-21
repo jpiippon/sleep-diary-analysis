@@ -35,6 +35,16 @@ This repository contains R scripts for cleaning, joining, and analyzing sleep di
 - When using lags, preserve the diary date convention: `lag(duration)` refers to the previous diary date, which is the previous exposure day/night in the ordered diary series.
 - Avoid interpreting models with lagged sleep as causal unless the timing and assumptions are explicitly discussed.
 
+## Sensitivity analyses inside variable-specific scripts
+- Each variable-specific script may later include a clearly marked sensitivity-analysis section after the main figures and main models.
+- Keep the main analysis simple and comparable across variables. Sensitivity analyses should support or qualify the main result, not replace it.
+- Useful sensitivity analyses include lagged sleep controls, alternative exposure codings, alternative thresholds, and a small number of theoretically motivated interactions.
+- Fixed effects do not automatically estimate interactions. Add explicit interaction terms only when needed, for example `temp_high25 * coffee` or the corresponding `fixest::i()` specification.
+- Prefer visualizing interactions with predicted values or grouped plots rather than relying only on interaction coefficient tables.
+- Do not test all possible interactions by default. A small number of theory-driven sensitivity checks is preferable to a large exploratory grid.
+- Save sensitivity figures with supporting names such as `<variable>_figureS*_sensitivity_*.png`.
+- Print sensitivity results to the console unless the user explicitly asks for reusable tables.
+
 ## Editing rules
 - When editing a script, change only that script unless explicitly asked to update others.
 - If a change may break another script, explain that clearly before or within the edit.
