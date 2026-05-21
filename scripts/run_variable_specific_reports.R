@@ -16,7 +16,8 @@ available_reports <- c(
   "weekday",
   "insomnia",
   "exercise",
-  "temperature"
+  "temperature",
+  "coffee"
 )
 
 if (!exists("reports_to_run")) {
