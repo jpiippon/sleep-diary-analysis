@@ -129,9 +129,9 @@ dat_coffee <- df_clean |>
       case_when(
         is.na(prev_duration) ~ NA_character_,
         prev_duration < 6 ~ "Previous night <6 h",
-        TRUE ~ "Previous night ≥6 h"
+        TRUE ~ "Previous night >=6 h"
       ),
-      levels = c("Previous night ≥6 h", "Previous night <6 h")
+      levels = c("Previous night >=6 h", "Previous night <6 h")
     ),
     diary_period = factor(
       case_when(
@@ -327,7 +327,7 @@ p_prev_short_interaction <- prev_short_duration_summary |>
   geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.12, position = position_dodge(width = 0.35), alpha = 0.8) +
   geom_line(linewidth = 1, position = position_dodge(width = 0.35)) +
   geom_point(size = 2.6, position = position_dodge(width = 0.35)) +
-  scale_color_manual(values = c("Previous night ≥6 h" = col_dark_blue, "Previous night <6 h" = col_orange)) +
+  scale_color_manual(values = c("Previous night >=6 h" = col_dark_blue, "Previous night <6 h" = col_orange)) +
   labs(title = "Coffee-sleep patterns differ after short and longer previous nights", subtitle = "Mean same-night sleep with approximate 95% confidence intervals", x = NULL, y = "Mean sleep duration (hours)", color = NULL) +
   coord_cartesian(ylim = c(0, NA)) +
   theme_sleep()
