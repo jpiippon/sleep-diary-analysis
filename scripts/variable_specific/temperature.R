@@ -344,7 +344,10 @@ p_over_time <- yearly_temperature_summary |>
 
 dat_model <- dat_temperature |>
   mutate(
-    temp_high25 = fct_drop(temp_high25),
+    temp_high25 = factor(
+      if_else(ka_temp > 25, "Above 25C", "25C or below"),
+      levels = c("25C or below", "Above 25C")
+    ),
     temp_band = fct_drop(temp_band),
     bedtime = factor(bedtime, levels = levels(bedtime), ordered = FALSE),
     coffee = factor(coffee, levels = levels(coffee), ordered = FALSE),
@@ -368,7 +371,7 @@ dat_model <- dat_temperature |>
     year_month
   )
 
-reference_temp <- pick_reference(dat_model$temp_high25, "25 °C or below")
+reference_temp <- pick_reference(dat_model$temp_high25, "25C or below")
 reference_bedtime <- pick_reference(dat_model$bedtime, "Before 23:00")
 reference_coffee <- pick_reference(dat_model$coffee, "None")
 reference_stress <- pick_reference(dat_model$stress, "No")
