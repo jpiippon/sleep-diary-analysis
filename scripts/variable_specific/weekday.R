@@ -122,12 +122,14 @@ fmt_min <- function(x) {
 }
 
 safe_feglm <- function(fml, data, model_name) {
+  data <- prepare_nw_data(data, fml)
+
   tryCatch(
     feglm(
       fml = fml,
       data = data,
       family = binomial(link = "logit"),
-      vcov = "hetero"
+      vcov = NW(7) ~ series_id + date
     ),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
@@ -162,6 +164,7 @@ dat_weekday <- df_clean |>
   ) |>
   select(
     date,
+    series_id,
     year_month,
     day_of_week,
     duration,
@@ -173,7 +176,8 @@ dat_weekday <- df_clean |>
     health,
     exercise
   ) |>
-  drop_na(day_of_week, duration, insomnia_num)
+  drop_na(day_of_week, duration, insomnia_num) |>
+  prepare_nw_data()
 
 n_total <- nrow(dat_weekday)
 
@@ -342,7 +346,8 @@ dat_model <- dat_weekday |>
     exercise = factor(exercise, levels = levels(exercise), ordered = FALSE),
     year_month = fct_drop(year_month)
   ) |>
-  drop_na(bedtime, coffee, stress, health, exercise, year_month)
+  drop_na(bedtime, coffee, stress, health, exercise, year_month) |>
+  prepare_nw_data()
 
 reference_bedtime <- pick_reference(dat_model$bedtime, c("Before 23:00"))
 reference_coffee <- pick_reference(dat_model$coffee, c("None"))
@@ -367,7 +372,7 @@ models_duration <- list(
   "Raw" = feols(
     duration ~ i(day_of_week, ref = reference_day),
     data = dat_weekday,
-    vcov = "hetero"
+    vcov = NW(7) ~ series_id + date
   ),
   "Adjusted" = feols(
     duration ~
@@ -378,7 +383,7 @@ models_duration <- list(
       i(health, ref = reference_health) +
       i(exercise, ref = reference_exercise),
     data = dat_model,
-    vcov = "hetero"
+    vcov = NW(7) ~ series_id + date
   ),
   "Month FE" = feols(
     duration ~
@@ -390,7 +395,7 @@ models_duration <- list(
       i(exercise, ref = reference_exercise) |
       year_month,
     data = dat_model,
-    vcov = "hetero"
+    vcov = NW(7) ~ series_id + date
   )
 )
 

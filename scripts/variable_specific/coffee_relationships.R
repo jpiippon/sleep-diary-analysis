@@ -79,8 +79,10 @@ pick_reference <- function(x, preferred) {
 }
 
 safe_feols <- function(fml, data, model_name) {
+  data <- prepare_nw_data(data, fml)
+
   tryCatch(
-    feols(fml = fml, data = data, vcov = "hetero"),
+    feols(fml = fml, data = data, vcov = NW(7) ~ series_id + date),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
       NULL
@@ -89,8 +91,10 @@ safe_feols <- function(fml, data, model_name) {
 }
 
 safe_feglm <- function(fml, data, model_name) {
+  data <- prepare_nw_data(data, fml)
+
   tryCatch(
-    feglm(fml = fml, data = data, family = binomial(link = "logit"), vcov = "hetero"),
+    feglm(fml = fml, data = data, family = binomial(link = "logit"), vcov = NW(7) ~ series_id + date),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
       NULL
@@ -149,7 +153,7 @@ dat_coffee_rel <- df_clean |>
     late_bedtime_num = as.integer(bedtime_late == "23:00 or later"),
     exercise_any_num = as.integer(exercise_any == "Any exercise"),
     insomnia_any = as.integer(insomnia_num > 0),
-    prev_duration = lag(duration),
+    prev_duration = lag_by_calendar_days(duration, date, 1),
     prev_short_sleep = factor(
       case_when(
         is.na(prev_duration) ~ NA_character_,
@@ -160,7 +164,7 @@ dat_coffee_rel <- df_clean |>
     )
   ) |>
   select(
-    date, year_month, day_of_week, duration, prev_duration, prev_short_sleep,
+    date, series_id, year_month, day_of_week, duration, prev_duration, prev_short_sleep,
     insomnia_any, coffee, coffee_any, bedtime, bedtime_late,
     exercise, exercise_any, stress, health,
     late_bedtime_num, exercise_any_num
@@ -332,7 +336,8 @@ dat_model <- dat_coffee_rel |>
     day_of_week = fct_drop(day_of_week),
     year_month = fct_drop(year_month)
   ) |>
-  drop_na(coffee_any, bedtime_late, exercise_any, duration, stress, health, exercise, day_of_week, year_month)
+  drop_na(coffee_any, bedtime_late, exercise_any, duration, stress, health, exercise, day_of_week, year_month) |>
+  prepare_nw_data()
 
 reference_bedtime <- pick_reference(dat_model$bedtime, "Before 23:00")
 reference_stress <- pick_reference(dat_model$stress, "No")

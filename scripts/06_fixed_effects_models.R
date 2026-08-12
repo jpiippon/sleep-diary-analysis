@@ -124,10 +124,11 @@ dat_fe <- sleep_mittari |>
     exercise = fct_drop(exercise)
   ) |>
   select(
-    date, duration, bedtime, coffee, stress, health, exercise,
+    date, series_id, duration, bedtime, coffee, stress, health, exercise,
     day_of_week, year_month
   ) |>
-  drop_na()
+  drop_na() |>
+  prepare_nw_data()
 
 dat_sensor <- sleep_mittari_sensor |>
   mutate(
@@ -140,10 +141,11 @@ dat_sensor <- sleep_mittari_sensor |>
     exercise = fct_drop(exercise)
   ) |>
   select(
-    date, duration, bedtime, coffee, stress, health, exercise,
+    date, series_id, duration, bedtime, coffee, stress, health, exercise,
     day_of_week, year_month, ka_co2, ka_temp, ka_humid
   ) |>
-  drop_na()
+  drop_na() |>
+  prepare_nw_data()
 
 cat("\n========== FIXED-EFFECTS SAMPLE ==========\n")
 cat("Full modelling sample:", nrow(dat_fe), "nights\n")
@@ -160,14 +162,14 @@ cat("Date range (sensor):", format(min(dat_sensor$date), "%Y-%m-%d"), "to",
 m_pool <- feols(
   duration ~ bedtime + coffee + stress + health + exercise + day_of_week,
   data = dat_fe,
-  vcov = "hetero"
+  vcov = NW(7) ~ series_id + date
 )
 
 m_fe <- feols(
   duration ~ bedtime + coffee + stress + health + exercise |
     day_of_week + year_month,
   data = dat_fe,
-  vcov = "hetero"
+  vcov = NW(7) ~ series_id + date
 )
 
 m_sensor <- feols(
@@ -177,7 +179,7 @@ m_sensor <- feols(
     scale(ka_humid) |
     day_of_week + year_month,
   data = dat_sensor,
-  vcov = "hetero"
+  vcov = NW(7) ~ series_id + date
 )
 
 cat("\n========== MODEL SUMMARIES ==========\n")
@@ -263,7 +265,7 @@ m_y_resid <- feols(
     scale(ka_humid) |
     day_of_week + year_month,
   data = dat_sensor,
-  vcov = "hetero"
+  vcov = NW(7) ~ series_id + date
 )
 
 m_x_resid <- feols(
@@ -272,7 +274,7 @@ m_x_resid <- feols(
     scale(ka_humid) |
     day_of_week + year_month,
   data = dat_sensor,
-  vcov = "hetero"
+  vcov = NW(7) ~ series_id + date
 )
 
 # `feols()` can drop rows internally (e.g., due to missingness / singleton FE).

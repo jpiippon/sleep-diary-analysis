@@ -86,8 +86,10 @@ fmt_pct <- function(x, accuracy = 1) scales::percent(x, accuracy = accuracy)
 fmt_min <- function(x) paste0(if_else(x > 0, "+", ""), round(x), " min")
 
 safe_feols <- function(fml, data, model_name) {
+  data <- prepare_nw_data(data, fml)
+
   tryCatch(
-    feols(fml = fml, data = data, vcov = "hetero"),
+    feols(fml = fml, data = data, vcov = NW(7) ~ series_id + date),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
       NULL
@@ -96,8 +98,10 @@ safe_feols <- function(fml, data, model_name) {
 }
 
 safe_feglm <- function(fml, data, model_name) {
+  data <- prepare_nw_data(data, fml)
+
   tryCatch(
-    feglm(fml = fml, data = data, family = binomial(link = "logit"), vcov = "hetero"),
+    feglm(fml = fml, data = data, family = binomial(link = "logit"), vcov = NW(7) ~ series_id + date),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
       NULL
@@ -121,8 +125,8 @@ dat_coffee <- df_clean |>
     year = factor(format(date, "%Y")),
     year_month = factor(format(date, "%Y-%m")),
     insomnia_any = as.integer(insomnia_num > 0),
-    prev_duration = lag(duration),
-    prev2_duration = lag(duration, 2),
+    prev_duration = lag_by_calendar_days(duration, date, 1),
+    prev2_duration = lag_by_calendar_days(duration, date, 2),
     two_night_sleep_sum = prev_duration + prev2_duration,
     two_night_shortfall = pmax(0, 14 - two_night_sleep_sum),
     prev_short_sleep = factor(
@@ -143,7 +147,7 @@ dat_coffee <- df_clean |>
     )
   ) |>
   select(
-    date, year, year_month, diary_period, day_of_week,
+    date, series_id, year, year_month, diary_period, day_of_week,
     duration, prev_duration, prev2_duration, two_night_sleep_sum, two_night_shortfall,
     prev_short_sleep, insomnia_num, insomnia_any, coffee, bedtime, stress, health, exercise
   ) |>
@@ -346,7 +350,8 @@ dat_model <- dat_coffee |>
     day_of_week = fct_drop(day_of_week),
     year_month = fct_drop(year_month)
   ) |>
-  drop_na(coffee, duration, insomnia_any, bedtime, stress, health, exercise, day_of_week, year_month)
+  drop_na(coffee, duration, insomnia_any, bedtime, stress, health, exercise, day_of_week, year_month) |>
+  prepare_nw_data()
 
 reference_coffee <- pick_reference(dat_model$coffee, "None")
 reference_bedtime <- pick_reference(dat_model$bedtime, "Before 23:00")
@@ -360,16 +365,16 @@ cat("Observations:", nrow(dat_model), "\n")
 cat("Reference coffee:", reference_coffee, "\n")
 
 models_duration <- list(
-  "Raw" = feols(duration ~ i(coffee, ref = reference_coffee), data = dat_model, vcov = "hetero"),
+  "Raw" = feols(duration ~ i(coffee, ref = reference_coffee), data = dat_model, vcov = NW(7) ~ series_id + date),
   "Adjusted" = feols(
     duration ~ i(coffee, ref = reference_coffee) + i(bedtime, ref = reference_bedtime) + i(stress, ref = reference_stress) + i(health, ref = reference_health) + i(exercise, ref = reference_exercise) + i(day_of_week, ref = reference_day),
     data = dat_model,
-    vcov = "hetero"
+    vcov = NW(7) ~ series_id + date
   ),
   "Month FE" = feols(
     duration ~ i(coffee, ref = reference_coffee) + i(bedtime, ref = reference_bedtime) + i(stress, ref = reference_stress) + i(health, ref = reference_health) + i(exercise, ref = reference_exercise) + i(day_of_week, ref = reference_day) | year_month,
     data = dat_model,
-    vcov = "hetero"
+    vcov = NW(7) ~ series_id + date
   )
 )
 

@@ -143,12 +143,14 @@ binomial_summary <- function(data, group_vars) {
 }
 
 safe_feglm <- function(fml, data, model_name) {
+  data <- prepare_nw_data(data, fml)
+
   tryCatch(
     feglm(
       fml = fml,
       data = data,
       family = binomial(link = "logit"),
-      vcov = "hetero"
+      vcov = NW(7) ~ series_id + date
     ),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
@@ -179,6 +181,7 @@ dat_insomnia <- df_clean |>
   ) |>
   select(
     date,
+    series_id,
     year,
     year_month,
     day_of_week,
@@ -527,7 +530,8 @@ dat_model <- dat_insomnia |>
     exercise = factor(exercise, levels = levels(exercise), ordered = FALSE),
     year_month = fct_drop(year_month)
   ) |>
-  drop_na(day_of_week, bedtime, coffee, stress, health, exercise, year_month)
+  drop_na(day_of_week, bedtime, coffee, stress, health, exercise, year_month) |>
+  prepare_nw_data()
 
 reference_day <- pick_reference(dat_model$day_of_week, "Mon")
 reference_bedtime <- pick_reference(dat_model$bedtime, "Before 23:00")

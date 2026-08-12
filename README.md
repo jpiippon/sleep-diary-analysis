@@ -23,6 +23,14 @@ This is intentional. It keeps daily factors and the following night of sleep on 
 
 The sensor data use the same idea. Sensor readings after midnight, for example 00:00-07:59, are assigned to the previous calendar day because they still belong to the same night.
 
+## Coding notes
+
+- A sleep duration of zero hours is a valid observed night and is retained in the analysis.
+- `puhelinparkki = 0` means that the phone was not parked. Values 1, 2, and 3 mean parked before 20:00, 21:00, and 22:00, respectively.
+- The raw `aivotyo` value is preserved. The analysis-ready binary variable `brainwork_any` treats zero as no evening brainwork and any positive value as evening brainwork.
+- The meaning of `tukevaruoka = 1` is not yet documented, so that value should not be recoded or analyzed until the codebook is corrected.
+- Lagged variables are matched by exact calendar date. A missing diary date is not treated as an adjacent night.
+
 ## Repository structure
 
 - `data/raw/`: original input files
@@ -129,6 +137,8 @@ The project uses three common model layers:
 - month fixed-effect models, which compare nights within the same year-month period
 
 Some scripts also include sensitivity checks. For example, the coffee analysis checks whether coffee is related to sleep after controlling for previous-night sleep. This is important because coffee may be a response to poor sleep, not only a possible cause of poor sleep.
+
+Final `fixest` models use seven-day Newey-West standard errors. The model sample is split into uninterrupted daily sequences after complete-case filtering so uncertainty estimates do not bridge missing diary dates.
 
 The wording in the project should therefore stay careful. It is better to write:
 

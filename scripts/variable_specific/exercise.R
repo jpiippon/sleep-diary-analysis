@@ -102,12 +102,14 @@ fmt_pct <- function(x, accuracy = 1) scales::percent(x, accuracy = accuracy)
 fmt_min <- function(x) paste0(if_else(x > 0, "+", ""), round(x), " min")
 
 safe_feglm <- function(fml, data, model_name) {
+  data <- prepare_nw_data(data, fml)
+
   tryCatch(
     feglm(
       fml = fml,
       data = data,
       family = binomial(link = "logit"),
-      vcov = "hetero"
+      vcov = NW(7) ~ series_id + date
     ),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
@@ -128,6 +130,7 @@ dat_exercise <- df_clean |>
   ) |>
   select(
     date,
+    series_id,
     year,
     year_month,
     day_of_week,
@@ -329,7 +332,8 @@ dat_model <- dat_exercise |>
     day_of_week = fct_drop(day_of_week),
     year_month = fct_drop(year_month)
   ) |>
-  drop_na(exercise, duration, insomnia_any, bedtime, coffee, stress, health, day_of_week, year_month)
+  drop_na(exercise, duration, insomnia_any, bedtime, coffee, stress, health, day_of_week, year_month) |>
+  prepare_nw_data()
 
 reference_exercise <- pick_reference(dat_model$exercise, "None")
 reference_bedtime <- pick_reference(dat_model$bedtime, "Before 23:00")
@@ -355,7 +359,7 @@ models_duration <- list(
   "Raw" = feols(
     duration ~ i(exercise, ref = reference_exercise),
     data = dat_model,
-    vcov = "hetero"
+    vcov = NW(7) ~ series_id + date
   ),
   "Adjusted" = feols(
     duration ~
@@ -366,7 +370,7 @@ models_duration <- list(
       i(health, ref = reference_health) +
       i(day_of_week, ref = reference_day),
     data = dat_model,
-    vcov = "hetero"
+    vcov = NW(7) ~ series_id + date
   ),
   "Month FE" = feols(
     duration ~
@@ -378,7 +382,7 @@ models_duration <- list(
       i(day_of_week, ref = reference_day) |
       year_month,
     data = dat_model,
-    vcov = "hetero"
+    vcov = NW(7) ~ series_id + date
   )
 )
 

@@ -23,17 +23,26 @@ This repository contains R scripts for cleaning, joining, and analyzing sleep di
 - Treat raw data files as immutable.
 - Do not silently recode variables in ways that drop valid values.
 - Preserve both raw coded variables and readable labeled variables when useful for analysis.
+- Preserve zero-hour sleep records. They are valid observed nights, not missing or invalid durations.
 - Derive weekday from date variables when possible instead of relying on manually entered weekday fields.
 - Keep date and time handling explicit and reproducible.
 - Preserve the diary date convention: the date refers to the exposure day and the night that starts on that date. For example, sleep entered on Wednesday morning belongs to Tuesday if Tuesday contains the relevant bedtime, coffee, exercise, stress, and other exposures.
 - Do not shift diary dates forward to the wake-up date unless explicitly asked. Sensor observations after midnight should remain assigned to the previous calendar day when they belong to the same night window.
+- `puhelinparkki = 0` means that the phone was not parked. Codes 1, 2, and 3 mean parked before 20:00, 21:00, and 22:00, respectively.
+- Preserve raw `aivotyo`, but use a binary analysis variable where 0 means no evening brainwork and any positive value means evening brainwork.
+- Do not recode or analyze `tukevaruoka = 1` until its meaning has been documented.
 
 ## Temporal interpretation and lagged sleep
 - Previous sleep can affect current-day behaviors and the following night of sleep. This is especially relevant for variables such as coffee, where coffee intake may respond to poor sleep on the previous night.
 - Lagged sleep variables such as previous-night sleep duration and two-night sleep debt may be useful sensitivity checks, controls, or descriptive mechanisms.
 - Do not add lagged sleep controls automatically to every variable-specific script. Add them only when the user asks, when the research question clearly requires them, or as a clearly labelled sensitivity analysis.
-- When using lags, preserve the diary date convention: `lag(duration)` refers to the previous diary date, which is the previous exposure day/night in the ordered diary series.
+- When using lags, preserve the diary date convention and require exact calendar spacing. A one-night lag must be exactly one calendar day earlier; never let row order bridge missing diary dates. Use `lag_by_calendar_days()` for numeric diary variables.
 - Avoid interpreting models with lagged sleep as causal unless the timing and assumptions are explicitly discussed.
+
+## Time-series inference
+- Daily observations may have serially correlated errors. Final `fixest` reporting models should use panel Newey-West standard errors with a seven-day lag, uninterrupted sequence as the unit, and diary date as the time index: `vcov = NW(7) ~ series_id + date`.
+- Keep the data sorted by date and verify that the date is unique before fitting a Newey-West model. Use `series_id` to separate uninterrupted daily sequences so covariance estimates do not bridge missing diary dates. Run `prepare_nw_data()` after model-specific complete-case filtering to sort the sample and recompute `series_id`.
+- Heteroskedasticity-only standard errors may be retained as a sensitivity comparison, but they should not be the sole uncertainty estimate in final variable-specific reports.
 
 ## Sensitivity analyses inside variable-specific scripts
 - Each variable-specific script may later include a clearly marked sensitivity-analysis section after the main figures and main models.

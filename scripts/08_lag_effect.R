@@ -40,9 +40,9 @@ dir.create(here("outputs"), showWarnings = FALSE)
 dat <- df_clean |>
   arrange(date) |>
   mutate(
-    lag1_duration = lag(duration, 1),
-    lag2_duration = lag(duration, 2),
-    lag3_duration = lag(duration, 3)
+    lag1_duration = lag_by_calendar_days(duration, date, 1),
+    lag2_duration = lag_by_calendar_days(duration, date, 2),
+    lag3_duration = lag_by_calendar_days(duration, date, 3)
   )
 
 cat("\n========== LAG EFFECT SAMPLE SIZES ==========\n")

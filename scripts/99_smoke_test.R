@@ -76,14 +76,61 @@ cat("✓ Core scripts sourced successfully\n")
 assert_true(exists("df_clean"), "Object `df_clean` was not created.")
 assert_true(is.data.frame(df_clean), "`df_clean` is not a data.frame.")
 assert_true(nrow(df_clean) > 0, "`df_clean` has zero rows.")
+assert_true(all(df_clean$duration >= 0), "`df_clean` contains a negative sleep duration.")
+assert_true(anyDuplicated(df_clean$date) == 0, "`df_clean` contains duplicate diary dates.")
+
+raw_duration <- suppressWarnings(clean_numeric(df_raw$unituntia))
+raw_date <- as.Date(df_raw$aika)
+expected_zero_n <- sum(
+  raw_duration == 0 & !is.na(raw_date) & raw_date <= Sys.Date(),
+  na.rm = TRUE
+)
+
+assert_true(
+  sum(df_clean$duration == 0) == expected_zero_n,
+  "Valid zero-hour nights were not preserved during cleaning."
+)
 
 assert_has_cols(
   df_clean,
   c(
-    "date", "duration", "day_of_week", "bedtime",
-    "coffee", "stress", "exercise", "health", "insomnia_num"
+    "date", "series_id", "duration", "day_of_week", "bedtime",
+    "coffee", "stress", "exercise", "health", "insomnia_num",
+    "phone_parking", "brainwork_any"
   ),
   "df_clean"
+)
+
+lag_check <- lag_by_calendar_days(
+  x = c(6, 7, 8),
+  date = as.Date(c("2024-01-01", "2024-01-02", "2024-01-04")),
+  n = 1
+)
+
+lag2_check <- lag_by_calendar_days(
+  x = c(6, 7, 8),
+  date = as.Date(c("2024-01-01", "2024-01-02", "2024-01-04")),
+  n = 2
+)
+
+assert_true(
+  identical(lag_check, c(NA_real_, 6, NA_real_)),
+  "Calendar lag bridged a missing diary date."
+)
+
+assert_true(
+  identical(lag2_check, c(NA_real_, NA_real_, 7)),
+  "Calendar lag did not find the observation exactly two days earlier."
+)
+
+expected_series_id <- cumsum(c(
+  TRUE,
+  as.integer(diff(df_clean$date)) != 1L
+))
+
+assert_true(
+  identical(df_clean$series_id, expected_series_id),
+  "Uninterrupted diary sequences were not identified correctly."
 )
 
 assert_true(exists("dat_mittari"), "Object `dat_mittari` was not created.")
@@ -148,11 +195,12 @@ fe_dat <- sleep_mittari
 fe_dat$year_month <- factor(format(fe_dat$date, "%Y-%m"))
 
 fe_vars <- c(
-  "duration", "bedtime", "coffee", "stress", "health",
+  "date", "series_id", "duration", "bedtime", "coffee", "stress", "health",
   "exercise", "day_of_week", "year_month"
 )
 
 fe_dat <- fe_dat[stats::complete.cases(fe_dat[, fe_vars]), fe_vars, drop = FALSE]
+fe_dat <- prepare_nw_data(fe_dat)
 
 assert_true(nrow(fe_dat) >= 30, "Too few complete observations for fixed-effects smoke test.")
 assert_true(n_levels(fe_dat$day_of_week) >= 2, "Fixed-effects smoke test needs at least 2 weekday levels.")
@@ -162,7 +210,7 @@ m_fe <- fixest::feols(
   duration ~ bedtime + coffee + stress + health + exercise |
     day_of_week + year_month,
   data = fe_dat,
-  vcov = "hetero"
+  vcov = fixest::vcov_NW(unit = "series_id", time = "date", lag = 7)
 )
 
 assert_true(length(coef(m_fe)) > 0, "Fixed-effects smoke test failed to produce coefficients.")
@@ -177,11 +225,12 @@ sensor_dat <- sleep_mittari_sensor
 sensor_dat$year_month <- factor(format(sensor_dat$date, "%Y-%m"))
 
 sensor_vars <- c(
-  "duration", "bedtime", "coffee", "stress", "health", "exercise",
+  "date", "series_id", "duration", "bedtime", "coffee", "stress", "health", "exercise",
   "day_of_week", "year_month", "ka_co2", "ka_temp", "ka_humid"
 )
 
 sensor_dat <- sensor_dat[stats::complete.cases(sensor_dat[, sensor_vars]), sensor_vars, drop = FALSE]
+sensor_dat <- prepare_nw_data(sensor_dat)
 
 sensor_ready <- nrow(sensor_dat) >= 30 &&
   n_levels(sensor_dat$day_of_week) >= 2 &&
@@ -198,7 +247,7 @@ if (sensor_ready) {
       scale(ka_humid) |
       day_of_week + year_month,
     data = sensor_dat,
-    vcov = "hetero"
+    vcov = fixest::vcov_NW(unit = "series_id", time = "date", lag = 7)
   )
   
   assert_true(length(coef(m_sensor)) > 0, "Sensor smoke test failed to produce coefficients.")

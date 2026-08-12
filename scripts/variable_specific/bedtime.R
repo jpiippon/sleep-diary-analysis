@@ -107,12 +107,14 @@ pick_reference <- function(x, preferred) {
 }
 
 safe_feglm <- function(fml, data, model_name) {
+  data <- prepare_nw_data(data, fml)
+
   tryCatch(
     feglm(
       fml = fml,
       data = data,
       family = binomial(link = "logit"),
-      vcov = "hetero"
+      vcov = NW(7) ~ series_id + date
     ),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
@@ -138,6 +140,7 @@ dat_bedtime <- df_clean |>
   ) |>
   select(
     date,
+    series_id,
     year_month,
     day_of_week,
     duration,
@@ -420,7 +423,8 @@ dat_model <- dat_bedtime |>
     day_of_week = fct_drop(day_of_week),
     year_month = fct_drop(year_month)
   ) |>
-  drop_na(bedtime, duration, insomnia_any, coffee, stress, health, exercise, day_of_week, year_month)
+  drop_na(bedtime, duration, insomnia_any, coffee, stress, health, exercise, day_of_week, year_month) |>
+  prepare_nw_data()
 
 reference_bedtime <- pick_reference(dat_model$bedtime, "Before 23:00")
 reference_coffee <- pick_reference(dat_model$coffee, "None")
@@ -446,7 +450,7 @@ models_duration <- list(
   "Raw" = feols(
     duration ~ i(bedtime, ref = reference_bedtime),
     data = dat_model,
-    vcov = "hetero"
+    vcov = NW(7) ~ series_id + date
   ),
   "Adjusted" = feols(
     duration ~
@@ -457,7 +461,7 @@ models_duration <- list(
       i(exercise, ref = reference_exercise) +
       i(day_of_week, ref = reference_day),
     data = dat_model,
-    vcov = "hetero"
+    vcov = NW(7) ~ series_id + date
   ),
   "Month FE" = feols(
     duration ~
@@ -469,7 +473,7 @@ models_duration <- list(
       i(day_of_week, ref = reference_day) |
       year_month,
     data = dat_model,
-    vcov = "hetero"
+    vcov = NW(7) ~ series_id + date
   )
 )
 
