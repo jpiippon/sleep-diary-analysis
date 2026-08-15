@@ -1,27 +1,45 @@
 # =============================================================================
 # coffee.R
 #
-# Purpose: Analyze coffee intake, previous-night sleep, and sleep outcomes.
+# Purpose: Examine temporal ordering and year-to-year variation in the
+# association between coffee use and sleep duration.
 #
 # Research questions:
-#   How has coffee intake varied over time?
-#   Does coffee intake follow shorter previous-night sleep?
-#   How is coffee intake associated with same-night sleep duration and insomnia?
-#   Are coffee estimates sensitive to lagged-sleep controls or simple interactions?
+#   RQ1. How has the share of diary days with any coffee changed over time?
+#   RQ2. Is coffee more common after an exact previous night with <6 h sleep?
+#   RQ3. How is same-day coffee associated with sleep duration on the night
+#        that begins on that diary date?
+#   RQ4. Does the adjusted coffee-sleep association vary across complete
+#        calendar years?
+#   RQ5. How sensitive is the pooled association to previous-night sleep
+#        context, bedtime adjustment, and the original four-level coding?
 #
 # Input:
 #   df_clean from scripts/01_load_main_data.R
 #
 # Outputs:
-#   - descriptive summaries printed to console
-#   - numbered figures saved to outputs/figures/variable_specific/coffee/
-#   - raw, adjusted, month fixed-effect, and sensitivity models for reporting
+#   - descriptive and model summaries printed to the console
+#   - one four-panel main figure for public-facing reporting
+#   - a small set of supporting model figures
+#   - figures saved to outputs/figures/variable_specific/coffee/
+#   - no CSV files
 #
 # Notes for interpretation:
-#   - The diary date is the exposure day and the night that starts on that date.
-#   - Coffee is treated as a same-day diary exposure.
-#   - Results are associations, not causal effects.
-#   - Reverse causality is plausible: short previous-night sleep can increase coffee intake.
+#   - The diary date is the coffee-exposure day and the night that starts on
+#     that date. Therefore, same-date sleep is the night following that day's
+#     coffee use.
+#   - Previous-night sleep is matched by exact calendar date. Missing diary
+#     dates are never treated as consecutive nights.
+#   - Any coffee versus no coffee is the primary exposure for year-specific
+#     estimates because detailed timing categories are sparse in some years.
+#     The mix of those categories can itself change over time, so the annual
+#     estimate describes that year's mix of coffee days rather than one fixed
+#     dose or timing.
+#   - Bedtime occurs after daytime coffee and may be part of the pathway from
+#     coffee to sleep. It is therefore included only as a sensitivity check.
+#   - Year-specific estimates are exploratory and should not be interpreted as
+#     proof that the effect of coffee changed.
+#   - All results are associations, not causal effects.
 # =============================================================================
 
 library(tidyverse)
@@ -35,12 +53,17 @@ if (!exists("df_clean")) {
   stop("df_clean not found. Run 01_load_main_data.R first.")
 }
 
-figure_dir <- here("outputs", "figures", "variable_specific", "coffee")
+variable_name <- "coffee"
+figure_dir <- here("outputs", "figures", "variable_specific", variable_name)
+
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 
 # =============================================================================
 # SETTINGS AND HELPERS
 # =============================================================================
+
+short_sleep_cutoff <- 6
+minimum_exposure_days_per_year <- 20
 
 col_navy       <- "#002d5a"
 col_dark_blue  <- "#2f4a73"
@@ -52,17 +75,24 @@ col_orange     <- "#CC5500"
 col_dark_text  <- "#2a2a2a"
 col_grey       <- "grey40"
 
-make_palette <- function(n) {
-  blues <- c(col_navy, col_dark_blue, col_steel, col_mid_blue, col_light_blue, col_pale_blue)
-  if (n <= length(blues)) blues[seq_len(n)] else colorRampPalette(c(col_navy, col_pale_blue))(n)
-}
+coffee_binary_palette <- c(
+  "No coffee" = col_light_blue,
+  "Any coffee" = col_orange
+)
+
+coffee_category_palette <- c(
+  "None" = col_pale_blue,
+  "Half a cup in the morning" = col_mid_blue,
+  "A cup or two before noon" = col_dark_blue,
+  "Coffee after noon" = col_orange
+)
 
 theme_sleep <- function() {
   theme_minimal(base_size = 13) +
     theme(
       plot.title = element_text(size = 15, face = "bold", hjust = 0),
       plot.subtitle = element_text(size = 11, color = col_grey, hjust = 0),
-      plot.caption = element_text(size = 9, color = "grey50"),
+      plot.caption = element_text(size = 9, color = "grey50", hjust = 0),
       plot.margin = margin(15, 15, 15, 15),
       axis.title = element_text(size = 12),
       axis.text = element_text(size = 10),
@@ -74,22 +104,25 @@ theme_sleep <- function() {
 }
 
 save_plot <- function(plot, filename, width = 10, height = 6) {
-  ggsave(file.path(figure_dir, filename), plot, width = width, height = height, dpi = 300)
+  ggsave(
+    filename = file.path(figure_dir, filename),
+    plot = plot,
+    width = width,
+    height = height,
+    dpi = 300,
+    bg = "white"
+  )
 }
-
-pick_reference <- function(x, preferred) {
-  c(intersect(preferred, levels(x)), levels(x)[1]) |>
-    purrr::pluck(1)
-}
-
-fmt_pct <- function(x, accuracy = 1) scales::percent(x, accuracy = accuracy)
-fmt_min <- function(x) paste0(if_else(x > 0, "+", ""), round(x), " min")
 
 safe_feols <- function(fml, data, model_name) {
-  data <- prepare_nw_data(data, fml)
+  model_data <- prepare_nw_data(data, fml)
 
   tryCatch(
-    feols(fml = fml, data = data, vcov = NW(7) ~ series_id + date),
+    feols(
+      fml = fml,
+      data = model_data,
+      vcov = NW(7) ~ series_id + date
+    ),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
       NULL
@@ -97,15 +130,37 @@ safe_feols <- function(fml, data, model_name) {
   )
 }
 
-safe_feglm <- function(fml, data, model_name) {
-  data <- prepare_nw_data(data, fml)
+fmt_pct <- function(x, accuracy = 1) {
+  scales::percent(x, accuracy = accuracy)
+}
 
-  tryCatch(
-    feglm(fml = fml, data = data, family = binomial(link = "logit"), vcov = NW(7) ~ series_id + date),
-    error = \(e) {
-      warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
-      NULL
-    }
+fmt_min <- function(x) {
+  paste0(if_else(x > 0, "+", ""), round(x), " min")
+}
+
+empty_plot <- function(message) {
+  ggplot() +
+    annotate("text", x = 0, y = 0, label = message, size = 4, color = col_grey) +
+    xlim(-1, 1) +
+    ylim(-1, 1) +
+    theme_void()
+}
+
+extract_binary_coffee_result <- function(model, model_name) {
+  if (is.null(model) || !"coffee_any_num" %in% names(coef(model))) {
+    return(tibble())
+  }
+
+  estimate <- unname(coef(model)[["coffee_any_num"]])
+  std_error <- unname(se(model)[["coffee_any_num"]])
+
+  tibble(
+    model = model_name,
+    n = nobs(model),
+    estimate_minutes = estimate * 60,
+    ci_low_minutes = (estimate - 1.96 * std_error) * 60,
+    ci_high_minutes = (estimate + 1.96 * std_error) * 60,
+    label = fmt_min(estimate_minutes)
   )
 }
 
@@ -122,474 +177,801 @@ clean_coffee_term <- function(x) {
 dat_coffee <- df_clean |>
   arrange(date) |>
   mutate(
-    year = factor(format(date, "%Y")),
+    year_num = as.integer(format(date, "%Y")),
+    month_num = as.integer(format(date, "%m")),
     year_month = factor(format(date, "%Y-%m")),
-    insomnia_any = as.integer(insomnia_num > 0),
-    prev_duration = lag_by_calendar_days(duration, date, 1),
-    prev2_duration = lag_by_calendar_days(duration, date, 2),
-    two_night_sleep_sum = prev_duration + prev2_duration,
-    two_night_shortfall = pmax(0, 14 - two_night_sleep_sum),
-    prev_short_sleep = factor(
-      case_when(
-        is.na(prev_duration) ~ NA_character_,
-        prev_duration < 6 ~ "Previous night <6 h",
-        TRUE ~ "Previous night >=6 h"
-      ),
-      levels = c("Previous night >=6 h", "Previous night <6 h")
+    coffee_any_num = case_when(
+      coffee_code == 0 ~ 0L,
+      coffee_code %in% 1:3 ~ 1L,
+      TRUE ~ NA_integer_
     ),
-    diary_period = factor(
-      case_when(
-        date < as.Date("2020-03-01") ~ "Before Mar 2020",
-        date < as.Date("2022-09-01") ~ "Mar 2020-Aug 2022",
-        TRUE ~ "Sep 2022 onward"
-      ),
-      levels = c("Before Mar 2020", "Mar 2020-Aug 2022", "Sep 2022 onward")
-    )
-  ) |>
-  select(
-    date, series_id, year, year_month, diary_period, day_of_week,
-    duration, prev_duration, prev2_duration, two_night_sleep_sum, two_night_shortfall,
-    prev_short_sleep, insomnia_num, insomnia_any, coffee, bedtime, stress, health, exercise
-  ) |>
-  drop_na(coffee, duration, insomnia_num)
-
-n_total <- nrow(dat_coffee)
-coffee_palette <- make_palette(n_distinct(dat_coffee$coffee))
-
-cat("\n========== COFFEE ANALYSIS SAMPLE ==========\n")
-cat("Observations:", n_total, "\n")
-cat("Date range:", format(min(dat_coffee$date), "%Y-%m-%d"), "to", format(max(dat_coffee$date), "%Y-%m-%d"), "\n")
-
-# =============================================================================
-# DESCRIPTIVE SUMMARIES
-# =============================================================================
-
-coffee_summary <- dat_coffee |>
-  group_by(coffee) |>
-  summarise(
-    n = n(),
-    share = n / nrow(dat_coffee),
-    mean_sleep = mean(duration, na.rm = TRUE),
-    median_sleep = median(duration, na.rm = TRUE),
-    se_sleep = sd(duration, na.rm = TRUE) / sqrt(n),
-    ci_low = mean_sleep - 1.96 * se_sleep,
-    ci_high = mean_sleep + 1.96 * se_sleep,
-    insomnia_n = sum(insomnia_any == 1, na.rm = TRUE),
-    insomnia_rate = mean(insomnia_any == 1, na.rm = TRUE),
-    insomnia_se = sqrt(insomnia_rate * (1 - insomnia_rate) / n),
-    insomnia_ci_low = pmax(insomnia_rate - 1.96 * insomnia_se, 0),
-    insomnia_ci_high = pmin(insomnia_rate + 1.96 * insomnia_se, 1),
-    .groups = "drop"
-  ) |>
-  mutate(
-    distribution_label = paste0(fmt_pct(share, accuracy = 1), "\n(n=", n, ")"),
-    median_label = paste0("Median: ", median_sleep, " h"),
-    insomnia_label = fmt_pct(insomnia_rate, accuracy = 1),
-    across(c(share, mean_sleep, median_sleep, se_sleep, ci_low, ci_high, insomnia_rate, insomnia_se, insomnia_ci_low, insomnia_ci_high), \(x) round(x, 3))
-  )
-
-prev_sleep_summary <- dat_coffee |>
-  drop_na(prev_duration) |>
-  group_by(coffee) |>
-  summarise(
-    n = n(),
-    mean_prev_sleep = mean(prev_duration, na.rm = TRUE),
-    median_prev_sleep = median(prev_duration, na.rm = TRUE),
-    short_prev_sleep_share = mean(prev_duration < 6, na.rm = TRUE),
-    .groups = "drop"
-  ) |>
-  mutate(
-    prev_median_label = paste0("Prev. median: ", median_prev_sleep, " h"),
-    across(c(mean_prev_sleep, median_prev_sleep, short_prev_sleep_share), \(x) round(x, 3))
-  )
-
-yearly_coffee_summary <- dat_coffee |>
-  group_by(year, coffee) |>
-  summarise(n = n(), .groups = "drop") |>
-  group_by(year) |>
-  mutate(share = n / sum(n)) |>
-  ungroup()
-
-yearly_coffee_totals <- dat_coffee |>
-  count(year, name = "n_year")
-
-period_coffee_summary <- dat_coffee |>
-  group_by(diary_period, coffee) |>
-  summarise(n = n(), .groups = "drop") |>
-  group_by(diary_period) |>
-  mutate(share = n / sum(n)) |>
-  ungroup()
-
-period_coffee_totals <- dat_coffee |>
-  count(diary_period, name = "n_period")
-
-coffee_after_prev_sleep_summary <- dat_coffee |>
-  drop_na(prev_short_sleep) |>
-  group_by(prev_short_sleep, coffee) |>
-  summarise(n = n(), .groups = "drop") |>
-  group_by(prev_short_sleep) |>
-  mutate(share = n / sum(n)) |>
-  ungroup()
-
-prev_short_duration_summary <- dat_coffee |>
-  drop_na(prev_short_sleep) |>
-  group_by(prev_short_sleep, coffee) |>
-  summarise(
-    n = n(),
-    mean_sleep = mean(duration, na.rm = TRUE),
-    se_sleep = sd(duration, na.rm = TRUE) / sqrt(n),
-    ci_low = mean_sleep - 1.96 * se_sleep,
-    ci_high = mean_sleep + 1.96 * se_sleep,
-    .groups = "drop"
-  )
-
-cat("\n========== SLEEP OUTCOMES BY COFFEE CATEGORY ==========\n")
-print(coffee_summary, n = Inf, width = Inf)
-cat("\n========== PREVIOUS-NIGHT SLEEP BY COFFEE CATEGORY ==========\n")
-print(prev_sleep_summary, n = Inf, width = Inf)
-cat("\n========== COFFEE AFTER PREVIOUS-NIGHT SLEEP ==========\n")
-print(coffee_after_prev_sleep_summary, n = Inf, width = Inf)
-
-# =============================================================================
-# DESCRIPTIVE VISUALIZATIONS
-# =============================================================================
-
-label_y <- quantile(dat_coffee$duration, 0.97, na.rm = TRUE)
-prev_label_y <- quantile(dat_coffee$prev_duration, 0.97, na.rm = TRUE)
-
-p_distribution <- coffee_summary |>
-  ggplot(aes(x = coffee, y = share, fill = coffee)) +
-  geom_col(alpha = 0.85, width = 0.72) +
-  geom_text(aes(label = distribution_label), vjust = -0.35, size = 3.1, color = col_dark_text) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, min(1, max(coffee_summary$share, na.rm = TRUE) + 0.2))) +
-  scale_fill_manual(values = coffee_palette, guide = "none") +
-  labs(title = "Coffee categories are unevenly represented", subtitle = paste0("Nightly coffee category shares (N = ", n_total, ")"), x = NULL, y = "Share of nights") +
-  theme_sleep()
-
-p_over_time <- yearly_coffee_summary |>
-  ggplot(aes(x = year, y = share, fill = coffee)) +
-  geom_col(alpha = 0.92) +
-  geom_text(data = yearly_coffee_totals, aes(x = year, y = 1.03, label = paste0("n=", n_year)), inherit.aes = FALSE, size = 3, color = col_dark_text) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-  scale_fill_manual(values = coffee_palette) +
-  coord_cartesian(ylim = c(0, 1.08), clip = "off") +
-  labs(title = "Coffee intake changed over time", subtitle = "Yearly category composition; labels show total nights per year", x = NULL, y = "Share of nights", fill = NULL) +
-  theme_sleep()
-
-p_period_composition <- period_coffee_summary |>
-  ggplot(aes(x = diary_period, y = share, fill = coffee)) +
-  geom_col(alpha = 0.92, width = 0.72) +
-  geom_text(data = period_coffee_totals, aes(x = diary_period, y = 1.04, label = paste0("n=", n_period)), inherit.aes = FALSE, size = 3, color = col_dark_text) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-  scale_fill_manual(values = coffee_palette) +
-  coord_cartesian(ylim = c(0, 1.08), clip = "off") +
-  labs(title = "Coffee habits differ across diary periods", subtitle = "Period-level category composition; labels show total nights per period", x = NULL, y = "Share of nights", fill = NULL) +
-  theme_sleep() +
-  theme(axis.text.x = element_text(angle = 20, hjust = 1))
-
-p_prev_duration <- dat_coffee |>
-  drop_na(prev_duration) |>
-  ggplot(aes(x = coffee, y = prev_duration, fill = coffee)) +
-  geom_boxplot(alpha = 0.75, outlier.shape = NA, width = 0.62) +
-  geom_jitter(width = 0.12, alpha = 0.08, size = 1.0, color = col_dark_text) +
-  geom_label(data = prev_sleep_summary, aes(x = coffee, y = prev_label_y, label = prev_median_label), inherit.aes = FALSE, size = 2.5, linewidth = 0.12, fill = "white", color = col_dark_text) +
-  scale_fill_manual(values = coffee_palette, guide = "none") +
-  labs(title = "Coffee days often follow shorter sleep", subtitle = "Previous-night sleep duration by next-day coffee category", x = NULL, y = "Previous-night sleep duration (hours)") +
-  coord_cartesian(ylim = c(0, NA)) +
-  theme_sleep()
-
-p_coffee_after_prev_sleep <- coffee_after_prev_sleep_summary |>
-  ggplot(aes(x = prev_short_sleep, y = share, fill = coffee)) +
-  geom_col(alpha = 0.92, width = 0.72) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-  scale_fill_manual(values = coffee_palette) +
-  labs(title = "Coffee choices differ after short and longer nights", subtitle = "Coffee category shares by previous-night sleep duration", x = NULL, y = "Share of nights", fill = NULL) +
-  theme_sleep()
-
-p_duration <- dat_coffee |>
-  ggplot(aes(x = coffee, y = duration, fill = coffee)) +
-  geom_boxplot(alpha = 0.75, outlier.shape = NA, width = 0.62) +
-  geom_jitter(width = 0.12, alpha = 0.08, size = 1.0, color = col_dark_text) +
-  geom_label(data = coffee_summary, aes(x = coffee, y = label_y, label = median_label), inherit.aes = FALSE, size = 2.6, linewidth = 0.12, fill = "white", color = col_dark_text) +
-  scale_fill_manual(values = coffee_palette, guide = "none") +
-  labs(title = "Same-night sleep differs across coffee categories", subtitle = "Boxplots and medians by same-day coffee intake category", x = NULL, y = "Sleep duration (hours)") +
-  coord_cartesian(ylim = c(0, NA)) +
-  theme_sleep()
-
-p_insomnia <- coffee_summary |>
-  ggplot(aes(x = coffee, y = insomnia_rate, group = 1)) +
-  geom_errorbar(aes(ymin = insomnia_ci_low, ymax = insomnia_ci_high), width = 0.12, color = col_dark_blue, alpha = 0.8) +
-  geom_line(linewidth = 1, color = col_dark_blue) +
-  geom_point(size = 3, color = col_orange) +
-  geom_text(aes(label = insomnia_label), vjust = -0.9, size = 3.0, color = col_dark_text) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, min(1, max(coffee_summary$insomnia_ci_high, na.rm = TRUE) + 0.08))) +
-  labs(title = "Insomnia rates can be compared by coffee category", subtitle = "Share of nights with any recorded insomnia; approximate 95% confidence intervals", x = NULL, y = "Insomnia rate") +
-  theme_sleep()
-
-p_prev_short_interaction <- prev_short_duration_summary |>
-  ggplot(aes(x = coffee, y = mean_sleep, color = prev_short_sleep, group = prev_short_sleep)) +
-  geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.12, position = position_dodge(width = 0.35), alpha = 0.8) +
-  geom_line(linewidth = 1, position = position_dodge(width = 0.35)) +
-  geom_point(size = 2.6, position = position_dodge(width = 0.35)) +
-  scale_color_manual(values = c("Previous night >=6 h" = col_dark_blue, "Previous night <6 h" = col_orange)) +
-  labs(title = "Coffee-sleep patterns differ after short and longer previous nights", subtitle = "Mean same-night sleep with approximate 95% confidence intervals", x = NULL, y = "Mean sleep duration (hours)", color = NULL) +
-  coord_cartesian(ylim = c(0, NA)) +
-  theme_sleep()
-
-# =============================================================================
-# MODEL DATA
-# =============================================================================
-
-dat_model <- dat_coffee |>
-  mutate(
+    coffee_any = factor(
+      coffee_any_num,
+      levels = 0:1,
+      labels = c("No coffee", "Any coffee")
+    ),
+    prev_duration = lag_by_calendar_days(duration, date, 1),
+    prev_short_num = case_when(
+      is.na(prev_duration) ~ NA_integer_,
+      prev_duration < short_sleep_cutoff ~ 1L,
+      TRUE ~ 0L
+    ),
+    prev_sleep_group = factor(
+      prev_short_num,
+      levels = 0:1,
+      labels = c("Previous night >=6 h", "Previous night <6 h")
+    ),
     coffee = factor(coffee, levels = levels(coffee), ordered = FALSE),
     bedtime = factor(bedtime, levels = levels(bedtime), ordered = FALSE),
     stress = factor(stress, levels = levels(stress), ordered = FALSE),
     health = factor(health, levels = levels(health), ordered = FALSE),
     exercise = factor(exercise, levels = levels(exercise), ordered = FALSE),
+    day_of_week = factor(day_of_week, levels = levels(day_of_week), ordered = FALSE)
+  ) |>
+  select(
+    date,
+    series_id,
+    year_num,
+    month_num,
+    year_month,
+    day_of_week,
+    duration,
+    prev_duration,
+    prev_short_num,
+    prev_sleep_group,
+    coffee_code,
+    coffee,
+    coffee_any_num,
+    coffee_any,
+    bedtime,
+    stress,
+    health,
+    exercise
+  ) |>
+  drop_na(duration, coffee_any_num, coffee_any)
+
+n_total <- nrow(dat_coffee)
+
+cat("\n========== COFFEE ANALYSIS SAMPLE ==========\n")
+cat("Observations:", n_total, "\n")
+cat(
+  "Date range:", format(min(dat_coffee$date), "%Y-%m-%d"), "to",
+  format(max(dat_coffee$date), "%Y-%m-%d"), "\n"
+)
+cat("Any-coffee days:", sum(dat_coffee$coffee_any_num), "\n")
+cat("No-coffee days:", sum(dat_coffee$coffee_any_num == 0), "\n")
+
+# =============================================================================
+# DESCRIPTIVE SUMMARIES
+# =============================================================================
+
+year_coverage <- dat_coffee |>
+  group_by(year_num) |>
+  summarise(
+    n = n(),
+    coffee_days = sum(coffee_any_num == 1),
+    no_coffee_days = sum(coffee_any_num == 0),
+    coffee_rate = mean(coffee_any_num),
+    first_date = min(date),
+    last_date = max(date),
+    observed_months = n_distinct(month_num),
+    .groups = "drop"
+  ) |>
+  mutate(
+    full_calendar_year = observed_months == 12,
+    year_label = paste0(year_num, if_else(full_calendar_year, "", "*")),
+    year_label = factor(year_label, levels = year_label),
+    rate_label = fmt_pct(coffee_rate)
+  )
+
+previous_sleep_summary <- dat_coffee |>
+  drop_na(prev_sleep_group) |>
+  group_by(prev_sleep_group) |>
+  summarise(
+    n = n(),
+    coffee_days = sum(coffee_any_num == 1),
+    coffee_rate = mean(coffee_any_num),
+    se = sqrt(coffee_rate * (1 - coffee_rate) / n),
+    ci_low = pmax(0, coffee_rate - 1.96 * se),
+    ci_high = pmin(1, coffee_rate + 1.96 * se),
+    .groups = "drop"
+  ) |>
+  mutate(label = paste0(fmt_pct(coffee_rate), "\n(n=", n, ")"))
+
+duration_summary <- dat_coffee |>
+  group_by(coffee_any) |>
+  summarise(
+    n = n(),
+    mean_sleep = mean(duration),
+    median_sleep = median(duration),
+    .groups = "drop"
+  ) |>
+  mutate(median_label = paste0("Median: ", round(median_sleep, 1), " h"))
+
+yearly_category_summary <- dat_coffee |>
+  count(year_num, coffee, name = "n") |>
+  group_by(year_num) |>
+  mutate(share = n / sum(n)) |>
+  ungroup() |>
+  left_join(
+    year_coverage |>
+      select(year_num, year_label),
+    by = "year_num"
+  )
+
+short_night_rate <- previous_sleep_summary |>
+  filter(prev_sleep_group == "Previous night <6 h") |>
+  pull(coffee_rate)
+
+longer_night_rate <- previous_sleep_summary |>
+  filter(prev_sleep_group == "Previous night >=6 h") |>
+  pull(coffee_rate)
+
+coffee_after_short_title <- if (
+  length(short_night_rate) == 1 &&
+    length(longer_night_rate) == 1 &&
+    short_night_rate > longer_night_rate
+) {
+  "Coffee was more common after <6 h sleep"
+} else {
+  "Coffee use differed by previous-night sleep"
+}
+
+cat("\n========== COFFEE USE BY YEAR ==========\n")
+print(year_coverage, n = Inf, width = Inf)
+cat("\n========== COFFEE AFTER PREVIOUS-NIGHT SLEEP ==========\n")
+print(previous_sleep_summary, n = Inf, width = Inf)
+cat("\n========== SAME-NIGHT SLEEP BY COFFEE USE ==========\n")
+print(duration_summary, n = Inf, width = Inf)
+
+# =============================================================================
+# POOLED MODELS
+# =============================================================================
+
+# Use one complete-case sample so changes between the pooled models reflect the
+# adjustment set rather than changes in which diary days are included.
+dat_pooled_model <- dat_coffee |>
+  drop_na(
+    duration,
+    coffee,
+    coffee_any_num,
+    prev_duration,
+    bedtime,
+    stress,
+    health,
+    exercise,
+    day_of_week,
+    year_month
+  ) |>
+  mutate(
+    coffee = fct_drop(coffee),
+    bedtime = fct_drop(bedtime),
+    stress = fct_drop(stress),
+    health = fct_drop(health),
+    exercise = fct_drop(exercise),
     day_of_week = fct_drop(day_of_week),
     year_month = fct_drop(year_month)
-  ) |>
-  drop_na(coffee, duration, insomnia_any, bedtime, stress, health, exercise, day_of_week, year_month) |>
-  prepare_nw_data()
-
-reference_coffee <- pick_reference(dat_model$coffee, "None")
-reference_bedtime <- pick_reference(dat_model$bedtime, "Before 23:00")
-reference_stress <- pick_reference(dat_model$stress, "No")
-reference_health <- pick_reference(dat_model$health, "Healthy")
-reference_exercise <- pick_reference(dat_model$exercise, "None")
-reference_day <- pick_reference(dat_model$day_of_week, c("Mon", "Monday"))
-
-cat("\n========== COFFEE MODELLING SAMPLE ==========\n")
-cat("Observations:", nrow(dat_model), "\n")
-cat("Reference coffee:", reference_coffee, "\n")
-
-models_duration <- list(
-  "Raw" = feols(duration ~ i(coffee, ref = reference_coffee), data = dat_model, vcov = NW(7) ~ series_id + date),
-  "Adjusted" = feols(
-    duration ~ i(coffee, ref = reference_coffee) + i(bedtime, ref = reference_bedtime) + i(stress, ref = reference_stress) + i(health, ref = reference_health) + i(exercise, ref = reference_exercise) + i(day_of_week, ref = reference_day),
-    data = dat_model,
-    vcov = NW(7) ~ series_id + date
-  ),
-  "Month FE" = feols(
-    duration ~ i(coffee, ref = reference_coffee) + i(bedtime, ref = reference_bedtime) + i(stress, ref = reference_stress) + i(health, ref = reference_health) + i(exercise, ref = reference_exercise) + i(day_of_week, ref = reference_day) | year_month,
-    data = dat_model,
-    vcov = NW(7) ~ series_id + date
   )
-)
 
-purrr::iwalk(models_duration, \(model, model_name) {
-  cat("\n==========", toupper(model_name), "COFFEE MODEL: SLEEP DURATION ==========\n")
-  print(summary(model))
-})
-
-models_insomnia <- list(
-  "Raw" = safe_feglm(insomnia_any ~ i(coffee, ref = reference_coffee), data = dat_model, model_name = "Raw"),
-  "Adjusted" = safe_feglm(
-    insomnia_any ~ i(coffee, ref = reference_coffee) + i(bedtime, ref = reference_bedtime) + i(stress, ref = reference_stress) + i(health, ref = reference_health) + i(exercise, ref = reference_exercise) + i(day_of_week, ref = reference_day),
-    data = dat_model,
-    model_name = "Adjusted"
+models_pooled <- list(
+  "Raw" = safe_feols(
+    duration ~ coffee_any_num,
+    data = dat_pooled_model,
+    model_name = "Raw pooled coffee model"
   ),
-  "Month FE" = safe_feglm(
-    insomnia_any ~ i(coffee, ref = reference_coffee) + i(bedtime, ref = reference_bedtime) + i(stress, ref = reference_stress) + i(health, ref = reference_health) + i(exercise, ref = reference_exercise) + i(day_of_week, ref = reference_day) | year_month,
-    data = dat_model,
-    model_name = "Month FE"
+  "Calendar adjusted" = safe_feols(
+    duration ~ coffee_any_num + day_of_week | year_month,
+    data = dat_pooled_model,
+    model_name = "Calendar-adjusted pooled coffee model"
+  ),
+  "Previous-sleep adjusted" = safe_feols(
+    duration ~
+      coffee_any_num +
+      prev_duration +
+      stress +
+      health +
+      exercise +
+      day_of_week |
+      year_month,
+    data = dat_pooled_model,
+    model_name = "Previous-sleep-adjusted pooled coffee model"
+  ),
+  "Plus bedtime sensitivity" = safe_feols(
+    duration ~
+      coffee_any_num +
+      prev_duration +
+      bedtime +
+      stress +
+      health +
+      exercise +
+      day_of_week |
+      year_month,
+    data = dat_pooled_model,
+    model_name = "Pooled coffee model plus bedtime"
   )
 ) |>
   purrr::compact()
 
-purrr::iwalk(models_insomnia, \(model, model_name) {
-  cat("\n==========", toupper(model_name), "COFFEE MODEL: INSOMNIA ==========\n")
-  print(summary(model))
-})
+purrr::iwalk(
+  models_pooled,
+  \(model, model_name) {
+    cat("\n==========", toupper(model_name), "==========\n")
+    print(summary(model))
+  }
+)
 
-# =============================================================================
-# MODEL RESULTS AND SENSITIVITY CHECKS
-# =============================================================================
+pooled_results <- purrr::imap_dfr(
+  models_pooled,
+  \(model, model_name) extract_binary_coffee_result(model, model_name)
+) |>
+  mutate(model = factor(model, levels = rev(names(models_pooled))))
 
-get_duration_results <- function(model_results) {
-  purrr::map2_dfr(model_results, names(model_results), \(model, model_name) {
-    tibble(term = names(coef(model)), estimate = as.numeric(coef(model)), std_error = as.numeric(se(model))) |>
-      filter(str_detect(term, "^coffee::")) |>
-      transmute(
-        model = model_name,
-        coffee = clean_coffee_term(term),
-        estimate_minutes = estimate * 60,
-        ci_low_minutes = (estimate - 1.96 * std_error) * 60,
-        ci_high_minutes = (estimate + 1.96 * std_error) * 60,
-        label = fmt_min(estimate_minutes)
-      )
-  })
+# A linear probability model provides an interpretable percentage-point check
+# for RQ2. Panel B remains descriptive because this model does not establish why
+# coffee was consumed.
+model_coffee_after_short_sleep <- safe_feols(
+  coffee_any_num ~ prev_short_num + day_of_week | year_month,
+  data = dat_coffee |>
+    drop_na(prev_short_num, day_of_week, year_month),
+  model_name = "Coffee use after previous-night short sleep"
+)
+
+if (!is.null(model_coffee_after_short_sleep)) {
+  cat("\n========== COFFEE USE AFTER <6 H PREVIOUS-NIGHT SLEEP ==========\n")
+  print(summary(model_coffee_after_short_sleep))
 }
 
-coffee_duration_results <- get_duration_results(models_duration) |>
-  mutate(
-    model = factor(model, levels = c("Raw", "Adjusted", "Month FE")),
-    coffee = factor(coffee, levels = rev(setdiff(levels(dat_model$coffee), reference_coffee)))
+# This theory-driven interaction asks whether the coffee-sleep association is
+# different after a short previous night. It is a sensitivity analysis rather
+# than part of the main annual comparison.
+model_short_sleep_interaction <- safe_feols(
+  duration ~
+    coffee_any_num * prev_short_num +
+    prev_duration +
+    stress +
+    health +
+    exercise +
+    day_of_week |
+    year_month,
+  data = dat_pooled_model |>
+    drop_na(prev_short_num),
+  model_name = "Coffee by previous-night short-sleep interaction"
+)
+
+if (!is.null(model_short_sleep_interaction)) {
+  cat("\n========== COFFEE X PREVIOUS-NIGHT SHORT-SLEEP SENSITIVITY ==========\n")
+  print(summary(model_short_sleep_interaction))
+}
+
+# =============================================================================
+# YEAR-SPECIFIC MODELS
+# =============================================================================
+
+# Restrict year-specific estimates to full calendar years with enough exposed
+# and unexposed days. Partial years remain visible in the descriptive panel.
+dat_year_model <- dat_coffee |>
+  drop_na(
+    duration,
+    coffee_any_num,
+    prev_duration,
+    stress,
+    health,
+    exercise,
+    day_of_week,
+    month_num
   )
 
-month_fe_duration_results <- coffee_duration_results |>
-  filter(model == "Month FE")
+eligible_years <- dat_year_model |>
+  group_by(year_num) |>
+  summarise(
+    model_n = n(),
+    coffee_days = sum(coffee_any_num == 1),
+    no_coffee_days = sum(coffee_any_num == 0),
+    .groups = "drop"
+  ) |>
+  inner_join(
+    year_coverage |>
+      select(year_num, full_calendar_year),
+    by = "year_num"
+  ) |>
+  filter(
+    full_calendar_year,
+    coffee_days >= minimum_exposure_days_per_year,
+    no_coffee_days >= minimum_exposure_days_per_year
+  ) |>
+  pull(year_num)
 
-p_duration_coef_main <- month_fe_duration_results |>
-  ggplot(aes(y = coffee, x = estimate_minutes, xmin = ci_low_minutes, xmax = ci_high_minutes)) +
-  geom_linerange(linewidth = 1.2, color = col_dark_blue, alpha = 0.9) +
-  geom_point(size = 2.5, color = col_orange) +
-  geom_label(aes(x = ci_high_minutes + 3, label = label), hjust = 0, size = 3, linewidth = 0.15, fill = "white", color = col_dark_text) +
-  geom_vline(xintercept = 0, linewidth = 0.3, linetype = "dashed") +
-  scale_x_continuous(labels = \(x) paste0(round(x), " min"), breaks = scales::breaks_pretty(n = 6), expand = expansion(mult = c(0.05, 0.28))) +
-  labs(title = "Month fixed-effect estimates by coffee category", subtitle = paste0("Differences relative to ", reference_coffee, "; interpreted as associations"), x = "Difference in sleep duration (minutes)", y = NULL) +
+year_model_formula <- duration ~
+  coffee_any_num +
+  prev_duration +
+  stress +
+  health +
+  exercise +
+  day_of_week +
+  factor(month_num)
+
+models_by_year <- eligible_years |>
+  set_names() |>
+  purrr::map(
+    \(selected_year) {
+      year_data <- dat_year_model |>
+        filter(year_num == selected_year) |>
+        mutate(
+          stress = fct_drop(stress),
+          health = fct_drop(health),
+          exercise = fct_drop(exercise),
+          day_of_week = fct_drop(day_of_week)
+        )
+
+      model <- safe_feols(
+        year_model_formula,
+        data = year_data,
+        model_name = paste("Year-specific coffee model", selected_year)
+      )
+
+      if (is.null(model)) {
+        return(NULL)
+      }
+
+      list(
+        model = model,
+        model_n = nrow(year_data),
+        coffee_days = sum(year_data$coffee_any_num == 1)
+      )
+    }
+  ) |>
+  purrr::compact()
+
+yearly_model_results <- purrr::imap_dfr(
+  models_by_year,
+  \(model_info, year_name) {
+    model <- model_info$model
+
+    if (!"coffee_any_num" %in% names(coef(model))) {
+      return(tibble())
+    }
+
+    estimate <- unname(coef(model)[["coffee_any_num"]])
+    std_error <- unname(se(model)[["coffee_any_num"]])
+
+    tibble(
+      year_num = as.integer(year_name),
+      model_n = model_info$model_n,
+      coffee_days = model_info$coffee_days,
+      estimate_minutes = estimate * 60,
+      ci_low_minutes = (estimate - 1.96 * std_error) * 60,
+      ci_high_minutes = (estimate + 1.96 * std_error) * 60,
+      label = fmt_min(estimate_minutes)
+    )
+  }
+)
+
+if (nrow(yearly_model_results) > 0) {
+  cat("\n========== YEAR-SPECIFIC ADJUSTED COFFEE ESTIMATES ==========\n")
+  print(yearly_model_results, n = Inf, width = Inf)
+}
+
+# =============================================================================
+# ORIGINAL COFFEE-CATEGORY SENSITIVITY MODEL
+# =============================================================================
+
+reference_coffee <- if ("None" %in% levels(dat_pooled_model$coffee)) {
+  "None"
+} else {
+  levels(dat_pooled_model$coffee)[1]
+}
+
+model_coffee_categories <- safe_feols(
+  duration ~
+    i(coffee, ref = reference_coffee) +
+    prev_duration +
+    stress +
+    health +
+    exercise +
+    day_of_week |
+    year_month,
+  data = dat_pooled_model,
+  model_name = "Original coffee-category sensitivity model"
+)
+
+category_results <- if (!is.null(model_coffee_categories)) {
+  model_terms <- names(coef(model_coffee_categories))
+  model_estimates <- as.numeric(coef(model_coffee_categories))
+  model_se <- as.numeric(se(model_coffee_categories))
+
+  tibble(
+    term = model_terms,
+    estimate = model_estimates,
+    std_error = model_se
+  ) |>
+    filter(str_detect(term, "^coffee::")) |>
+    transmute(
+      coffee = clean_coffee_term(term),
+      estimate_minutes = estimate * 60,
+      ci_low_minutes = (estimate - 1.96 * std_error) * 60,
+      ci_high_minutes = (estimate + 1.96 * std_error) * 60,
+      label = fmt_min(estimate_minutes)
+    ) |>
+    mutate(
+      coffee = factor(
+        coffee,
+        levels = rev(setdiff(levels(dat_pooled_model$coffee), reference_coffee))
+      )
+    )
+} else {
+  tibble()
+}
+
+if (!is.null(model_coffee_categories)) {
+  cat("\n========== ORIGINAL COFFEE-CATEGORY SENSITIVITY MODEL ==========\n")
+  print(summary(model_coffee_categories))
+}
+
+# =============================================================================
+# FOUR-PANEL MAIN FIGURE
+# =============================================================================
+
+p_yearly_coffee <- year_coverage |>
+  ggplot(aes(x = year_label, y = coffee_rate)) +
+  geom_col(width = 0.72, fill = col_navy, alpha = 0.9) +
+  geom_text(
+    aes(label = rate_label),
+    vjust = -0.25,
+    size = 2.7,
+    color = col_dark_text,
+    fontface = "bold"
+  ) +
+  scale_y_continuous(
+    labels = scales::percent_format(accuracy = 1),
+    expand = expansion(mult = c(0, 0.18))
+  ) +
+  labs(
+    title = "Coffee use changed markedly over time",
+    subtitle = "Share of diary days with any coffee; * = partial year",
+    x = NULL,
+    y = "Days with coffee"
+  ) +
+  theme_sleep() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p_coffee_after_short <- previous_sleep_summary |>
+  ggplot(aes(x = prev_sleep_group, y = coffee_rate, fill = prev_sleep_group)) +
+  geom_col(width = 0.65, alpha = 0.92) +
+  geom_errorbar(
+    aes(ymin = ci_low, ymax = ci_high),
+    width = 0.12,
+    color = col_dark_text
+  ) +
+  geom_text(
+    aes(label = label),
+    vjust = -0.35,
+    size = 3,
+    color = col_dark_text,
+    lineheight = 0.9
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Previous night >=6 h" = col_light_blue,
+      "Previous night <6 h" = col_orange
+    ),
+    guide = "none"
+  ) +
+  scale_y_continuous(
+    labels = scales::percent_format(accuracy = 1),
+    limits = c(0, 1),
+    expand = expansion(mult = c(0, 0.08))
+  ) +
+  labs(
+    title = coffee_after_short_title,
+    subtitle = "Exact previous-day match; bars are descriptive",
+    x = NULL,
+    y = "Days with coffee"
+  ) +
+  theme_sleep() +
+  theme(axis.text.x = element_text(size = 8.5))
+
+duration_label_y <- quantile(dat_coffee$duration, 0.97, na.rm = TRUE)
+
+p_same_night_duration <- dat_coffee |>
+  ggplot(aes(x = coffee_any, y = duration, fill = coffee_any)) +
+  geom_boxplot(
+    width = 0.6,
+    alpha = 0.75,
+    outlier.shape = NA
+  ) +
+  geom_jitter(
+    width = 0.12,
+    alpha = 0.07,
+    size = 0.8,
+    color = col_dark_text
+  ) +
+  geom_label(
+    data = duration_summary,
+    aes(x = coffee_any, y = duration_label_y, label = median_label),
+    inherit.aes = FALSE,
+    size = 2.8,
+    linewidth = 0.15,
+    fill = "white",
+    color = col_dark_text
+  ) +
+  scale_fill_manual(values = coffee_binary_palette, guide = "none") +
+  coord_cartesian(ylim = c(0, NA)) +
+  labs(
+    title = "Same-night sleep by coffee use",
+    subtitle = "Raw distributions; the reason for drinking coffee is unadjusted",
+    x = NULL,
+    y = "Sleep duration (hours)"
+  ) +
+  theme_sleep()
+
+if (nrow(yearly_model_results) > 0) {
+  p_yearly_estimates <- yearly_model_results |>
+    mutate(year = factor(year_num, levels = sort(unique(year_num)))) |>
+    ggplot(
+      aes(
+        x = year,
+        y = estimate_minutes,
+        group = 1
+      )
+    ) +
+    geom_hline(yintercept = 0, linewidth = 0.35, linetype = "dashed") +
+    geom_errorbar(
+      aes(ymin = ci_low_minutes, ymax = ci_high_minutes),
+      width = 0.14,
+      color = col_dark_blue,
+      alpha = 0.8
+    ) +
+    geom_line(linewidth = 0.8, color = col_dark_blue, alpha = 0.75) +
+    geom_point(size = 2.5, color = col_orange) +
+    scale_y_continuous(
+      labels = \(x) paste0(round(x), " min"),
+      breaks = scales::breaks_pretty(n = 5),
+      expand = expansion(mult = c(0.1, 0.12))
+    ) +
+    labs(
+      title = "Adjusted estimates vary across years",
+      subtitle = "Below zero = shorter sleep after coffee; complete years only",
+      x = NULL,
+      y = "Adjusted difference"
+    ) +
+    theme_sleep() +
+    theme(
+      panel.grid.major.x = element_line(color = "grey92"),
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+} else {
+  p_yearly_estimates <- empty_plot(
+    "Not enough complete years for year-specific estimates"
+  )
+}
+
+partial_years <- year_coverage |>
+  filter(!full_calendar_year) |>
+  pull(year_num)
+
+partial_year_note <- if (length(partial_years) > 0) {
+  paste0("Partial years in panel A: ", paste(partial_years, collapse = ", "), ".")
+} else {
+  "All years in panel A cover all 12 months."
+}
+
+p_main <- (p_yearly_coffee + p_coffee_after_short) /
+  (p_same_night_duration + p_yearly_estimates) +
+  plot_layout(guides = "collect", widths = c(1, 1), heights = c(1, 1)) +
+  plot_annotation(
+    title = str_wrap(
+      "Coffee often followed short sleep, while its link with the next night varied over time",
+      width = 72
+    ),
+    subtitle = str_wrap(
+      "The diary separates why coffee may have been used from what happened on the following night",
+      width = 105
+    ),
+    caption = str_wrap(
+      paste(
+        "Panel B uses an exact 1-day calendar lag.",
+        "Panel D compares any coffee with no coffee and adjusts for previous-night sleep, stress, health, exercise, weekday, and month;",
+        "95% CIs use a 7-day Newey-West estimator.",
+        partial_year_note,
+        "Associations are not causal."
+      ),
+      width = 145
+    ),
+    tag_levels = "A",
+    theme = theme(
+      plot.title = element_text(size = 17, face = "bold"),
+      plot.subtitle = element_text(size = 11, color = col_grey),
+      plot.caption = element_text(size = 8.2, color = "grey45", hjust = 0)
+    )
+  ) &
+  theme(
+    plot.title = element_text(size = 11.5, face = "bold", hjust = 0),
+    plot.subtitle = element_text(size = 8.8, color = col_grey, hjust = 0),
+    plot.margin = margin(8, 8, 8, 8),
+    axis.title = element_text(size = 10),
+    axis.text = element_text(size = 8.5),
+    legend.position = "bottom",
+    legend.text = element_text(size = 8.5)
+  )
+
+# =============================================================================
+# SUPPORTING FIGURES
+# =============================================================================
+
+p_pooled_model_comparison <- pooled_results |>
+  ggplot(
+    aes(
+      y = model,
+      x = estimate_minutes
+    )
+  ) +
+  geom_segment(
+    aes(x = ci_low_minutes, xend = ci_high_minutes, yend = model),
+    linewidth = 1.1,
+    color = col_dark_blue
+  ) +
+  geom_point(size = 2.7, color = col_orange) +
+  geom_text(
+    aes(x = ci_high_minutes, label = label),
+    nudge_x = 2,
+    hjust = 0,
+    size = 3,
+    color = col_dark_text,
+    fontface = "bold"
+  ) +
+  geom_vline(xintercept = 0, linewidth = 0.35, linetype = "dashed") +
+  scale_x_continuous(
+    labels = \(x) paste0(round(x), " min"),
+    breaks = scales::breaks_pretty(n = 6),
+    expand = expansion(mult = c(0.08, 0.25))
+  ) +
   coord_cartesian(clip = "off") +
+  labs(
+    title = "Previous-night sleep changes the pooled coffee estimate",
+    subtitle = "Any coffee versus no coffee, using the same complete-case sample",
+    caption = str_wrap(
+      "Bedtime may be part of the coffee-to-sleep pathway, so the bedtime-adjusted model is a sensitivity check.",
+      width = 100
+    ),
+    x = "Difference in sleep duration",
+    y = NULL
+  ) +
   theme_sleep() +
   theme(panel.grid.major.x = element_line(color = "grey90"))
 
-p_duration_model_comparison <- coffee_duration_results |>
-  ggplot(aes(y = coffee, x = estimate_minutes, xmin = ci_low_minutes, xmax = ci_high_minutes, color = model)) +
-  geom_linerange(linewidth = 1.1, alpha = 0.75, position = position_dodge(width = 0.55)) +
-  geom_point(size = 2.1, position = position_dodge(width = 0.55)) +
-  geom_vline(xintercept = 0, linewidth = 0.3, linetype = "dashed") +
-  scale_color_manual(values = c("Raw" = col_light_blue, "Adjusted" = col_steel, "Month FE" = col_orange)) +
-  scale_x_continuous(labels = \(x) paste0(round(x), " min"), breaks = scales::breaks_pretty(n = 6)) +
-  labs(title = "Duration model comparison by coffee category", subtitle = paste0("Differences relative to ", reference_coffee, "; negative values indicate shorter sleep"), x = "Difference in sleep duration", y = NULL, color = NULL) +
-  theme_sleep() +
-  theme(legend.position = "bottom", panel.grid.major.x = element_line(color = "grey90"))
-
-get_insomnia_results <- function(model_results) {
-  purrr::map2_dfr(model_results, names(model_results), \(model, model_name) {
-    tibble(term = names(coef(model)), estimate = as.numeric(coef(model)), std_error = as.numeric(se(model))) |>
-      filter(str_detect(term, "^coffee::")) |>
-      transmute(model = model_name, coffee = clean_coffee_term(term), odds_ratio = exp(estimate), ci_low = exp(estimate - 1.96 * std_error), ci_high = exp(estimate + 1.96 * std_error))
-  })
-}
-
-if (length(models_insomnia) > 0) {
-  coffee_insomnia_results <- get_insomnia_results(models_insomnia) |>
-    mutate(model = factor(model, levels = c("Raw", "Adjusted", "Month FE")), coffee = factor(coffee, levels = rev(setdiff(levels(dat_model$coffee), reference_coffee))))
-
-  p_insomnia_model_comparison <- coffee_insomnia_results |>
-    ggplot(aes(y = coffee, x = odds_ratio, xmin = ci_low, xmax = ci_high, color = model)) +
-    geom_vline(xintercept = 1, linewidth = 0.3, linetype = "dashed") +
-    geom_linerange(linewidth = 1.1, alpha = 0.75, position = position_dodge(width = 0.55)) +
-    geom_point(size = 2.1, position = position_dodge(width = 0.55)) +
-    scale_x_log10(labels = scales::number_format(accuracy = 0.1), breaks = c(0.5, 1, 2, 4, 8)) +
-    scale_color_manual(values = c("Raw" = col_light_blue, "Adjusted" = col_steel, "Month FE" = col_orange), na.translate = FALSE) +
-    labs(title = "Insomnia model comparison by coffee category", subtitle = paste0("Odds ratios relative to ", reference_coffee, "; values above 1 indicate higher odds"), x = "Odds ratio, log scale", y = NULL, color = NULL) +
+if (nrow(category_results) > 0) {
+  p_category_sensitivity <- category_results |>
+    ggplot(
+      aes(
+        y = coffee,
+        x = estimate_minutes
+      )
+    ) +
+    geom_segment(
+      aes(x = ci_low_minutes, xend = ci_high_minutes, yend = coffee),
+      linewidth = 1.1,
+      color = col_dark_blue
+    ) +
+    geom_point(size = 2.7, color = col_orange) +
+    geom_text(
+      aes(x = ci_high_minutes, label = label),
+      nudge_x = 2,
+      hjust = 0,
+      size = 3,
+      color = col_dark_text,
+      fontface = "bold"
+    ) +
+    geom_vline(xintercept = 0, linewidth = 0.35, linetype = "dashed") +
+    scale_x_continuous(
+      labels = \(x) paste0(round(x), " min"),
+      breaks = scales::breaks_pretty(n = 6),
+      expand = expansion(mult = c(0.08, 0.25))
+    ) +
+    coord_cartesian(clip = "off") +
+    labs(
+      title = "Detailed coffee categories are a sensitivity analysis",
+      subtitle = str_wrap(
+        paste0(
+          "Adjusted differences relative to ", reference_coffee,
+          "; sparse categories produce wide intervals"
+        ),
+        width = 90
+      ),
+      x = "Difference in sleep duration",
+      y = NULL
+    ) +
     theme_sleep() +
-    theme(legend.position = "bottom", panel.grid.major.x = element_line(color = "grey90"))
-}
-
-dat_sensitivity <- dat_model |>
-  mutate(
-    coffee = fct_relevel(coffee, reference_coffee),
-    bedtime = fct_relevel(bedtime, reference_bedtime),
-    stress = fct_relevel(stress, reference_stress),
-    health = fct_relevel(health, reference_health),
-    exercise = fct_relevel(exercise, reference_exercise),
-    day_of_week = fct_relevel(day_of_week, reference_day),
-    prev_short_sleep = fct_drop(prev_short_sleep)
-  ) |>
-  drop_na(prev_duration, two_night_shortfall, prev_short_sleep)
-
-model_lagged <- safe_feols(
-  duration ~ i(coffee, ref = reference_coffee) + i(bedtime, ref = reference_bedtime) + i(stress, ref = reference_stress) + i(health, ref = reference_health) + i(exercise, ref = reference_exercise) + i(day_of_week, ref = reference_day) + prev_duration | year_month,
-  data = dat_sensitivity,
-  model_name = "Month FE + previous-night sleep"
-)
-
-model_two_night <- safe_feols(
-  duration ~ i(coffee, ref = reference_coffee) + i(bedtime, ref = reference_bedtime) + i(stress, ref = reference_stress) + i(health, ref = reference_health) + i(exercise, ref = reference_exercise) + i(day_of_week, ref = reference_day) + two_night_shortfall | year_month,
-  data = dat_sensitivity,
-  model_name = "Month FE + two-night shortfall"
-)
-
-model_interaction_prev <- safe_feols(
-  duration ~ coffee * prev_short_sleep + bedtime + stress + health + exercise + day_of_week | year_month,
-  data = dat_sensitivity,
-  model_name = "Coffee x previous-night short sleep"
-)
-
-model_interaction_bedtime <- safe_feols(
-  duration ~ coffee * bedtime + stress + health + exercise + day_of_week | year_month,
-  data = dat_sensitivity,
-  model_name = "Coffee x bedtime"
-)
-
-purrr::iwalk(list("Coffee x previous-night short sleep" = model_interaction_prev, "Coffee x bedtime" = model_interaction_bedtime) |> purrr::compact(), \(model, model_name) {
-  cat("\n========== INTERACTION MODEL:", toupper(model_name), "==========\n")
-  print(summary(model))
-})
-
-sensitivity_models <- list("Month FE" = models_duration[["Month FE"]], "Month FE + prev sleep" = model_lagged, "Month FE + 2-night shortfall" = model_two_night) |>
-  purrr::compact()
-
-sensitivity_duration_results <- get_duration_results(sensitivity_models) |>
-  mutate(
-    model = factor(model, levels = c("Month FE", "Month FE + prev sleep", "Month FE + 2-night shortfall")),
-    coffee = factor(coffee, levels = rev(setdiff(levels(dat_model$coffee), reference_coffee)))
+    theme(panel.grid.major.x = element_line(color = "grey90"))
+} else {
+  p_category_sensitivity <- empty_plot(
+    "Detailed coffee-category model was not estimable"
   )
-
-p_sensitivity <- sensitivity_duration_results |>
-  ggplot(aes(y = coffee, x = estimate_minutes, xmin = ci_low_minutes, xmax = ci_high_minutes, color = model)) +
-  geom_linerange(linewidth = 1.1, alpha = 0.8, position = position_dodge(width = 0.65)) +
-  geom_point(size = 2.1, position = position_dodge(width = 0.65)) +
-  geom_vline(xintercept = 0, linewidth = 0.3, linetype = "dashed") +
-  scale_color_manual(values = c("Month FE" = col_orange, "Month FE + prev sleep" = col_dark_blue, "Month FE + 2-night shortfall" = col_steel)) +
-  scale_x_continuous(labels = \(x) paste0(round(x), " min"), breaks = scales::breaks_pretty(n = 6)) +
-  labs(title = "Lagged sleep checks test whether coffee reflects prior sleep loss", subtitle = "Coffee estimates before and after controlling for previous-night sleep or two-night shortfall", x = "Difference in sleep duration", y = NULL, color = NULL) +
-  theme_sleep() +
-  theme(legend.position = "bottom", panel.grid.major.x = element_line(color = "grey90"))
-
-# =============================================================================
-# MAIN FIGURE AND SUPPORTING FIGURES
-# =============================================================================
-
-p_main <- (p_over_time + p_prev_duration) / (p_duration + p_sensitivity) +
-  plot_annotation(
-    title = "Coffee is tied to both previous-night sleep and same-night sleep",
-    subtitle = "Coffee use changes over time, often follows shorter sleep, and its sleep associations are sensitive to lagged-sleep controls",
-    tag_levels = "A"
-  ) &
-  theme(plot.tag = element_text(size = 14, face = "bold"))
-
-print(p_main)
-print(p_distribution)
-print(p_over_time)
-print(p_period_composition)
-print(p_prev_duration)
-print(p_coffee_after_prev_sleep)
-print(p_duration)
-print(p_duration_coef_main)
-print(p_duration_model_comparison)
-print(p_insomnia)
-print(p_prev_short_interaction)
-print(p_sensitivity)
-
-save_plot(p_main, "coffee_figure1_main.png", width = 14, height = 10)
-save_plot(p_duration_model_comparison, "coffee_figureS1_duration_model_comparison.png", width = 12, height = 6)
-if (exists("p_insomnia_model_comparison")) {
-  print(p_insomnia_model_comparison)
-  save_plot(p_insomnia_model_comparison, "coffee_figureS2_insomnia_model_comparison.png", width = 12, height = 6)
 }
-save_plot(p_over_time, "coffee_figureS3_over_time.png", width = 12, height = 6)
-save_plot(p_distribution, "coffee_figureS4_distribution.png", width = 8, height = 6)
-save_plot(p_duration, "coffee_figureS5_sleep_duration_boxplot.png", width = 8, height = 6)
-save_plot(p_insomnia, "coffee_figureS6_insomnia_rate.png", width = 8, height = 6)
-save_plot(p_sensitivity, "coffee_figureS7_sensitivity_lagged_sleep.png", width = 12, height = 7)
-save_plot(p_prev_duration, "coffee_figureS8_previous_sleep_by_coffee.png", width = 8, height = 6)
-save_plot(p_period_composition, "coffee_figureS9_period_composition.png", width = 10, height = 6)
-save_plot(p_coffee_after_prev_sleep, "coffee_figureS10_coffee_after_previous_sleep.png", width = 8, height = 6)
-save_plot(p_prev_short_interaction, "coffee_figureS11_sensitivity_prev_short_interaction.png", width = 10, height = 6)
-save_plot(p_duration_coef_main, "coffee_figureS12_month_fe_duration_coefficients.png", width = 10, height = 6)
 
-# Backward-compatible file names
-save_plot(p_main, "coffee_overview.png", width = 14, height = 10)
-save_plot(p_duration_model_comparison, "coffee_duration_coefficients.png", width = 12, height = 6)
-save_plot(p_insomnia, "insomnia_by_coffee.png", width = 8, height = 6)
-save_plot(p_duration, "sleep_duration_by_coffee.png", width = 8, height = 6)
-save_plot(p_over_time, "coffee_over_time.png", width = 12, height = 6)
+p_category_composition <- yearly_category_summary |>
+  ggplot(aes(x = year_label, y = share, fill = coffee)) +
+  geom_col(width = 0.78, alpha = 0.92) +
+  geom_text(
+    data = year_coverage,
+    aes(x = year_label, y = 1.03, label = paste0("n=", n)),
+    inherit.aes = FALSE,
+    size = 3,
+    color = col_dark_text
+  ) +
+  scale_fill_manual(values = coffee_category_palette, drop = FALSE) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  coord_cartesian(ylim = c(0, 1.08), clip = "off") +
+  labs(
+    title = "The mix of coffee categories also changed over time",
+    subtitle = str_wrap(
+      "Annual any-coffee estimates can reflect both a changing association and a changing mix of coffee doses or timing; * = partial year",
+      width = 110
+    ),
+    x = NULL,
+    y = "Share of diary days",
+    fill = NULL
+  ) +
+  theme_sleep() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Only the complete four-panel figure is saved for the main public-facing
+# output. Its individual panels are not written as separate files.
+figures_to_save <- list(
+  "coffee_figure1_main.png" = list(
+    plot = p_main,
+    width = 10,
+    height = 12.5
+  ),
+  "coffee_figureS1_pooled_model_comparison.png" = list(
+    plot = p_pooled_model_comparison,
+    width = 10,
+    height = 6
+  ),
+  "coffee_figureS2_timing_sensitivity.png" = list(
+    plot = p_category_sensitivity,
+    width = 10,
+    height = 6
+  ),
+  "coffee_figureS3_timing_composition_over_time.png" = list(
+    plot = p_category_composition,
+    width = 12,
+    height = 6
+  )
+)
+
+purrr::iwalk(
+  figures_to_save,
+  \(figure_spec, filename) {
+    print(figure_spec$plot)
+    save_plot(
+      plot = figure_spec$plot,
+      filename = filename,
+      width = figure_spec$width,
+      height = figure_spec$height
+    )
+  }
+)
+
+# =============================================================================
+# REPORTING SUMMARY
+# =============================================================================
 
 cat("\n========== REPORTING SUMMARY ==========\n")
-cat("Coffee analysis now emphasizes both same-night associations and possible reverse causality from previous-night sleep.\n")
-cat("Recommended main figure saved to:", file.path(figure_dir, "coffee_figure1_main.png"), "\n")
+cat("Research questions are documented at the top of this script.\n")
+cat(
+  "Primary year-specific exposure: any coffee versus no coffee; detailed",
+  "coffee timing is retained as a sensitivity analysis.\n"
+)
+cat(
+  "Eligible full years for adjusted annual estimates:",
+  if_else(length(eligible_years) > 0, paste(eligible_years, collapse = ", "), "none"),
+  "\n"
+)
+cat("Main figure saved to:", file.path(figure_dir, "coffee_figure1_main.png"), "\n")
 cat("Supporting figures saved to:", figure_dir, "\n")
-cat("Interpretation note: coffee coefficients should not be interpreted causally without stronger timing assumptions.\n")
+cat("No CSV files were created.\n")
+cat(
+  "Interpretation note: annual estimates can differ because exposure patterns,",
+  "sample composition, or other unmeasured conditions changed; they are not",
+  "causal effect estimates.\n"
+)
