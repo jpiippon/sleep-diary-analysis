@@ -228,6 +228,16 @@ insomnia_type_summary <- dat_bedtime |>
     label_vjust = if_else(insomnia_type == "Difficulty falling asleep", -0.8, 1.5)
   )
 
+insomnia_endpoint_labels <- insomnia_type_summary |>
+  filter(bedtime == "After 00:00") |>
+  mutate(
+    series_label = recode(
+      as.character(insomnia_type),
+      "Difficulty falling asleep" = "Difficulty falling\nasleep",
+      "Stress-related early waking" = "Early waking"
+    )
+  )
+
 coffee_bedtime_summary <- dat_bedtime |>
   drop_na(coffee_timing) |>
   count(coffee_timing, bedtime, name = "n") |>
@@ -355,19 +365,37 @@ p_insomnia_types <- insomnia_type_summary |>
     fontface = "bold",
     show.legend = FALSE
   ) +
+  geom_text(
+    data = insomnia_endpoint_labels,
+    aes(label = series_label),
+    nudge_x = 0.18,
+    hjust = 0,
+    size = 2.7,
+    lineheight = 0.9,
+    fontface = "bold",
+    show.legend = FALSE
+  ) +
+  scale_x_discrete(expand = expansion(add = c(0.2, 0.9))) +
   scale_y_continuous(
     labels = scales::percent_format(accuracy = 1),
-    expand = expansion(mult = c(0.05, 0.18))
+    expand = expansion(mult = c(0.05, 0.22))
   ) +
   scale_color_manual(
     values = c(
       "Difficulty falling asleep" = col_orange,
       "Stress-related early waking" = col_dark_blue
-    )
+    ),
+    guide = "none"
   ) +
   labs(
-    title = "Insomnia patterns by bedtime",
-    subtitle = "Observed shares by recorded insomnia type",
+    title = str_wrap(
+      "The two insomnia patterns move in opposite directions",
+      width = 34
+    ),
+    subtitle = str_wrap(
+      "Later bedtimes coincide with more difficulty falling asleep but less early waking",
+      width = 46
+    ),
     x = NULL,
     y = "Share of nights",
     color = NULL
