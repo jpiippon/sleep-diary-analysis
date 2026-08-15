@@ -14,7 +14,7 @@
 #
 # Outputs:
 #   - descriptive summaries printed to console
-#   - numbered figures saved to figures/variable_specific/coffee/
+#   - numbered figures saved to outputs/figures/variable_specific/coffee/
 #   - raw, adjusted, month fixed-effect, and sensitivity models for reporting
 #
 # Notes for interpretation:
@@ -35,7 +35,7 @@ if (!exists("df_clean")) {
   stop("df_clean not found. Run 01_load_main_data.R first.")
 }
 
-figure_dir <- here("figures", "variable_specific", "coffee")
+figure_dir <- here("outputs", "figures", "variable_specific", "coffee")
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 
 # =============================================================================

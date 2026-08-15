@@ -14,7 +14,7 @@
 #
 # Outputs:
 #   - descriptive summaries printed to console
-#   - supporting figures saved to figures/variable_specific/coffee/
+#   - supporting figures saved to outputs/figures/variable_specific/coffee/
 #   - simple supporting models printed to console
 #
 # Notes:
@@ -34,7 +34,7 @@ if (!exists("df_clean")) {
   stop("df_clean not found. Run 01_load_main_data.R first.")
 }
 
-figure_dir <- here("figures", "variable_specific", "coffee")
+figure_dir <- here("outputs", "figures", "variable_specific", "coffee")
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 
 # =============================================================================

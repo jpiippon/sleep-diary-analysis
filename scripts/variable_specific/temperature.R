@@ -13,7 +13,7 @@
 #
 # Outputs:
 #   - descriptive summaries printed to console
-#   - numbered variable-specific figures saved to figures/variable_specific/temperature/
+#   - numbered variable-specific figures saved to outputs/figures/variable_specific/temperature/
 #   - raw, adjusted, and month fixed-effect models for reporting
 #
 # Notes for interpretation:
@@ -35,7 +35,7 @@ if (!exists("sleep_mittari_sensor")) {
   stop("sleep_mittari_sensor not found. Run 03_join_relevant_data.R first.")
 }
 
-figure_dir <- here("figures", "variable_specific", "temperature")
+figure_dir <- here("outputs", "figures", "variable_specific", "temperature")
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 
 # =============================================================================

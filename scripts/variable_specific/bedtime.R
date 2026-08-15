@@ -35,7 +35,8 @@ if (!exists("df_clean")) {
   stop("df_clean not found. Run 01_load_main_data.R first.")
 }
 
-figure_dir <- here("outputs", "figures", "variable_specific", "bedtime")
+variable_name <- "bedtime"
+figure_dir <- here("outputs", "figures", "variable_specific", variable_name)
 
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -43,13 +44,7 @@ dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 # SETTINGS
 # =============================================================================
 
-variable_name <- "bedtime"
-variable_label <- "Bedtime"
-outcome_name <- "duration"
 outcome_label <- "Sleep duration (hours)"
-
-# Bedtime is an ordered categorical exposure.
-variable_type <- "ordered categorical exposure"
 
 # =============================================================================
 # COLOR SYSTEM
@@ -203,14 +198,6 @@ weekday_bedtime_summary <- dat_bedtime |>
   ungroup() |>
   mutate(share = round(share, 3))
 
-monthly_bedtime_summary <- dat_bedtime |>
-  group_by(year_month, bedtime) |>
-  summarise(n = n(), .groups = "drop") |>
-  group_by(year_month) |>
-  mutate(share = n / sum(n)) |>
-  ungroup() |>
-  mutate(share = round(share, 3))
-
 insomnia_type_summary <- dat_bedtime |>
   select(bedtime, insomnia_onset, insomnia_early_waking) |>
   pivot_longer(
@@ -302,8 +289,8 @@ p_distribution <- bedtime_summary |>
     guide = "none"
   ) +
   labs(
-    title = "Almost half of nights start before 23:00",
-    subtitle = paste0("Share of observed nights (N = ", nrow(dat_bedtime), ")"),
+    title = "Bedtime distribution",
+    subtitle = paste0("Observed nights (N = ", nrow(dat_bedtime), ")"),
     x = NULL,
     y = "Share of nights"
   ) +
@@ -342,8 +329,8 @@ p_duration <- dat_bedtime |>
     guide = "none"
   ) +
   labs(
-    title = "Later bedtimes are associated with shorter sleep",
-    subtitle = paste0("Boxplots, individual nights, and median sleep durations (N = ", nrow(dat_bedtime), ")"),
+    title = "Sleep duration by bedtime",
+    subtitle = "Individual nights and category medians",
     x = NULL,
     y = outcome_label
   ) +
@@ -379,8 +366,8 @@ p_insomnia_types <- insomnia_type_summary |>
     )
   ) +
   labs(
-    title = "Insomnia types show opposite bedtime patterns",
-    subtitle = "Observed shares of nights by recorded insomnia type",
+    title = "Insomnia patterns by bedtime",
+    subtitle = "Observed shares by recorded insomnia type",
     x = NULL,
     y = "Share of nights",
     color = NULL
@@ -480,34 +467,15 @@ save_plot <- function(plot, filename, width = 10, height = 6) {
   )
 }
 
-save_plot_versions <- function(plot, filenames, width = 10, height = 6) {
-  purrr::walk(
-    filenames,
-    \(filename) save_plot(plot, filename, width = width, height = height)
-  )
-}
-
-save_plot_versions(
-  p_distribution,
-  c("bedtime_figureS4_distribution.png"),
-  width = 8,
-  height = 6
-)
-save_plot_versions(
-  p_duration,
-  c("bedtime_figureS5_sleep_duration_boxplot.png"),
-  width = 8,
-  height = 6
-)
-save_plot_versions(
+save_plot(
   p_over_time,
-  c("bedtime_figureS3_over_time.png"),
+  "bedtime_figureS3_over_time.png",
   width = 10,
   height = 6
 )
-save_plot_versions(
+save_plot(
   p_bedtime_context,
-  c("bedtime_figureS6_coffee_exercise_context.png"),
+  "bedtime_figureS4_coffee_exercise_context.png",
   width = 12,
   height = 6.5
 )
@@ -787,9 +755,9 @@ p_duration_coef <- bedtime_duration_results |>
   )
 
 print(p_duration_coef)
-save_plot_versions(
+save_plot(
   p_duration_coef,
-  c("bedtime_figureS1_duration_model_comparison.png", "bedtime_duration_coefficients.png"),
+  "bedtime_figureS1_duration_model_comparison.png",
   width = 10,
   height = 6
 )
@@ -878,12 +846,9 @@ if (length(models_insomnia) > 0) {
     )
 
   print(p_insomnia_coef)
-  save_plot_versions(
+  save_plot(
     p_insomnia_coef,
-    c(
-      "bedtime_figureS2_insomnia_type_model_comparison.png",
-      "bedtime_insomnia_type_odds_ratios.png"
-    ),
+    "bedtime_figureS2_insomnia_type_model_comparison.png",
     width = 10,
     height = 8
   )
@@ -950,8 +915,8 @@ p_duration_main <- duration_main_results |>
     expand = expansion(mult = c(0.08, 0.22))
   ) +
   labs(
-    title = "Adjusted sleep differences are largest after midnight",
-    subtitle = "Fully adjusted estimates relative to before 23:00; negative values mean shorter sleep",
+    title = "Adjusted sleep-duration differences",
+    subtitle = "Fully adjusted; reference: before 23:00",
     x = "Difference in sleep duration (minutes)",
     y = NULL
   ) +
@@ -961,10 +926,10 @@ p_duration_main <- duration_main_results |>
 
 p_main <- (p_distribution + p_duration) /
   (p_duration_main + p_insomnia_types) +
-  plot_layout(guides = "collect") +
+  plot_layout(guides = "collect", widths = c(1, 1), heights = c(1, 1)) +
   plot_annotation(
-    title = "Later bedtimes are associated with shorter sleep and different insomnia patterns",
-    subtitle = "Descriptive sleep-diary patterns and fully adjusted sleep-duration estimates",
+    title = "Later bedtimes coincide with shorter sleep and different insomnia patterns",
+    subtitle = "Descriptive patterns and fully adjusted sleep-duration estimates",
     caption = paste(
       "Panel C adjusts for coffee, stress, health, exercise, weekday, and month;",
       "95% CIs use a 7-day Newey-West estimator. Panels A, B, and D are descriptive.",
@@ -977,21 +942,22 @@ p_main <- (p_distribution + p_duration) /
       plot.caption = element_text(size = 8.5, color = "grey45", hjust = 0)
     )
   ) &
-  theme(legend.position = "bottom")
+  theme(
+    plot.title = element_text(size = 11.5, face = "bold", hjust = 0),
+    plot.subtitle = element_text(size = 9, color = col_grey, hjust = 0),
+    plot.margin = margin(8, 8, 8, 8),
+    axis.title = element_text(size = 10),
+    axis.text = element_text(size = 8.5),
+    legend.position = "bottom",
+    legend.text = element_text(size = 8.5)
+  )
 
 print(p_main)
-save_plot_versions(
+save_plot(
   p_main,
-  c("bedtime_figure1_main.png"),
+  "bedtime_figure1_main.png",
   width = 10,
   height = 12.5
-)
-
-save_plot_versions(
-  p_insomnia_types,
-  c("bedtime_figureS7_insomnia_type_rates.png"),
-  width = 8,
-  height = 6
 )
 
 # =============================================================================
@@ -1005,10 +971,7 @@ cat(
 )
 cat("Reference bedtime:", reference_bedtime, "\n")
 cat("Main figure saved to:", file.path(figure_dir, "bedtime_figure1_main.png"), "\n")
-cat("Supporting duration coefficient figure saved to:", file.path(figure_dir, "bedtime_duration_coefficients.png"), "\n")
-cat("Supporting insomnia odds-ratio figure saved to:", file.path(figure_dir, "bedtime_insomnia_type_odds_ratios.png"), "\n")
-cat("Supporting bedtime distribution figure saved to:", file.path(figure_dir, "bedtime_figureS4_distribution.png"), "\n")
-cat("Supporting sleep-duration figure saved to:", file.path(figure_dir, "bedtime_figureS5_sleep_duration_boxplot.png"), "\n")
+cat("Supporting duration model figure saved to:", file.path(figure_dir, "bedtime_figureS1_duration_model_comparison.png"), "\n")
+cat("Supporting insomnia model figure saved to:", file.path(figure_dir, "bedtime_figureS2_insomnia_type_model_comparison.png"), "\n")
 cat("Supporting bedtime-over-time figure saved to:", file.path(figure_dir, "bedtime_figureS3_over_time.png"), "\n")
-cat("Supporting coffee/exercise figure saved to:", file.path(figure_dir, "bedtime_figureS6_coffee_exercise_context.png"), "\n")
-cat("Supporting insomnia-rate figure saved to:", file.path(figure_dir, "bedtime_figureS7_insomnia_type_rates.png"), "\n")
+cat("Supporting coffee/exercise figure saved to:", file.path(figure_dir, "bedtime_figureS4_coffee_exercise_context.png"), "\n")

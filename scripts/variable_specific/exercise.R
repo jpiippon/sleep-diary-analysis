@@ -13,7 +13,7 @@
 #
 # Outputs:
 #   - descriptive summaries printed to console
-#   - numbered variable-specific figures saved to figures/variable_specific/exercise/
+#   - numbered variable-specific figures saved to outputs/figures/variable_specific/exercise/
 #   - raw, adjusted, and month fixed-effect models for reporting
 #
 # Notes for interpretation:
@@ -34,7 +34,7 @@ if (!exists("df_clean")) {
   stop("df_clean not found. Run 01_load_main_data.R first.")
 }
 
-figure_dir <- here("figures", "variable_specific", "exercise")
+figure_dir <- here("outputs", "figures", "variable_specific", "exercise")
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 
 # =============================================================================

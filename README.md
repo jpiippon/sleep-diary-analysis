@@ -36,11 +36,9 @@ The sensor data use the same idea. Sensor readings after midnight, for example 0
 - `data/raw/`: original input files
 - `scripts/`: main R scripts for loading, cleaning, joining, plotting, and modeling the data
 - `scripts/variable_specific/`: focused scripts that study one variable at a time
-- `figures/`: generated figures
-- `figures/variable_specific/`: figures from the one-variable scripts
-- `outputs/`: optional outputs, used only when reusable tables are needed
-- `archive/`: older exploratory work
-- `projects/`: additional project-specific work
+- `outputs/figures/`: generated figures
+- `outputs/figures/variable_specific/`: figures from the one-variable scripts
+- `outputs/variable_specific/`: optional reusable tables when an analysis needs them
 
 ## Main analysis workflow
 
@@ -130,11 +128,13 @@ Rscript scripts/variable_specific/temperature.R
 
 The models are meant to support interpretation, not to prove cause and effect.
 
-The project uses three common model layers:
+Variable-specific analyses can use three model layers when they suit the research question:
 
 - raw models, which show the simple association
-- adjusted models, which include other diary variables
-- month fixed-effect models, which compare nights within the same year-month period
+- calendar-adjusted models, which account for weekday and time-period differences
+- fully adjusted models, which also include relevant diary variables
+
+The exact model and adjustment variables depend on the exposure. They should not be copied mechanically from one analysis to another.
 
 Some scripts also include sensitivity checks. For example, the coffee analysis checks whether coffee is related to sleep after controlling for previous-night sleep. This is important because coffee may be a response to poor sleep, not only a possible cause of poor sleep.
 

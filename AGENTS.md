@@ -60,7 +60,7 @@ This repository contains R scripts for cleaning, joining, and analyzing sleep di
 - Prefer small diffs.
 - Keep the main numbered pipeline stable unless explicitly changing the core workflow.
 - Put focused one-variable reporting scripts in `scripts/variable_specific/`.
-- Put figures from focused one-variable reporting scripts in `figures/variable_specific/<variable_name>/`.
+- Put figures from focused one-variable reporting scripts in `outputs/figures/variable_specific/<variable_name>/`.
 - Do not add saved table outputs merely because a summary object exists.
 
 ## Variable-specific reporting scripts
@@ -78,7 +78,8 @@ This repository contains R scripts for cleaning, joining, and analyzing sleep di
 - New variable-specific scripts should usually combine descriptive summaries, publication-ready figures, simple models, fixed-effect extensions where appropriate, and a short reporting summary.
 - Treat these scripts as reproducible reporting modules: one variable or theme, one clear research question, one coherent set of figures, and model outputs that can later support public-facing summaries.
 - Do not use outcome-like variables as ordinary explanatory variables without considering timing and interpretation. For example, same-night insomnia should generally be treated as an outcome or descriptive co-occurrence measure rather than as a main predictor of same-night sleep duration.
-- Keep outputs predictable: figures should go to `figures/variable_specific/<variable_name>/`. Avoid table/output directories unless there is a clear downstream use.
+- Keep outputs predictable: figures should go to `outputs/figures/variable_specific/<variable_name>/`. Avoid table outputs unless there is a clear downstream use.
+- Do not save the same plot under multiple filenames. Do not save individual main-figure panels separately unless they have a clear reporting use.
 - Use numbered figure names for the recommended figure set: `<variable>_figure1_main.png` for the main figure and `<variable>_figureS*.png` for supporting figures.
 
 ## Future predictive modeling layer
