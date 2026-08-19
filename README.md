@@ -27,7 +27,7 @@ The sensor data use the same idea. Sensor readings after midnight, for example 0
 
 - A sleep duration of zero hours is a valid observed night and is retained in the analysis.
 - `puhelinparkki = 0` means that the phone was not parked. Values 1, 2, and 3 mean parked before 20:00, 21:00, and 22:00, respectively.
-- The raw `aivotyo` value is preserved. The analysis-ready binary 
+- The raw `aivotyo` value is preserved. The analysis-ready binary variable `brainwork_any` treats zero as no evening brainwork and any positive value as evening brainwork.
 - Lagged variables are matched by exact calendar date. A missing diary date is not treated as an adjacent night.
 
 ## Repository structure
@@ -80,6 +80,7 @@ Current examples include:
 - `weekday.R`: weekday differences in sleep
 - `insomnia.R`: insomnia patterns
 - `exercise.R`: exercise and sleep
+- `brainwork.R`: demanding thinking after 19:00, bedtime, and sleep
 - `temperature.R`: bedroom temperature and sleep
 - `coffee.R`: coffee, previous-night sleep, and same-night sleep
 - `coffee_relationships.R`: coffee/no coffee, bedtime, exercise, and context checks
