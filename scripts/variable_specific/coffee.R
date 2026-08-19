@@ -30,6 +30,14 @@
 #     coffee use.
 #   - Previous-night sleep is matched by exact calendar date. Missing diary
 #     dates are never treated as consecutive nights.
+#   - Coffee use is intentionally episodic and goal-directed: coffee is used
+#     when tired or when an additional alertness or productivity boost is
+#     desired. Regular use is intentionally avoided to preserve its perceived
+#     stimulant effect.
+#   - Coffee days are therefore behaviorally selected rather than random.
+#     Adjusting for previous-night sleep addresses only part of this
+#     confounding by indication; perceived fatigue and productivity demands
+#     may remain unmeasured.
 #   - Any coffee versus no coffee is the primary exposure for year-specific
 #     estimates because detailed timing categories are sparse in some years.
 #     The mix of those categories can itself change over time, so the annual
