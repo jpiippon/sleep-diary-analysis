@@ -81,6 +81,7 @@ Current examples include:
 - `insomnia.R`: insomnia patterns
 - `exercise.R`: exercise and sleep
 - `brainwork.R`: demanding thinking after 19:00, bedtime, and sleep
+- `stress.R`: recorded evening stress, insomnia patterns, bedtime, and sleep
 - `temperature.R`: bedroom temperature and sleep
 - `coffee.R`: coffee, previous-night sleep, and same-night sleep
 - `coffee_relationships.R`: coffee/no coffee, bedtime, exercise, and context checks
