@@ -16,6 +16,7 @@ available_reports <- c(
   "weekday",
   "insomnia",
   "exercise",
+  "brainwork",
   "temperature",
   "coffee",
   "coffee_relationships"
