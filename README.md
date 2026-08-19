@@ -1,10 +1,10 @@
 # Sleep diary analysis
 
-This repository contains an analysis of my long-term sleep diary. The data cover about 3,000 nights and include both daily notes and bedroom sensor data.
+This repository contains an analysis of my long-term sleep diary. The data cover about 3,000 nights. 
 
 The main goal is simple: I want to understand which things are linked to better or worse sleep. Examples include bedtime, weekday, coffee, exercise, stress, illness, bedroom temperature, CO2, and humidity.
 
-The project is also a coding and data-visualization portfolio. The aim is to build clear, reproducible R code and figures that can later be used in reports, presentations, or public posts.
+The aim is to build clear, reproducible R code and figures that can later be used in reports, presentations, or public posts. 
 
 ## What the data include
 
@@ -27,8 +27,7 @@ The sensor data use the same idea. Sensor readings after midnight, for example 0
 
 - A sleep duration of zero hours is a valid observed night and is retained in the analysis.
 - `puhelinparkki = 0` means that the phone was not parked. Values 1, 2, and 3 mean parked before 20:00, 21:00, and 22:00, respectively.
-- The raw `aivotyo` value is preserved. The analysis-ready binary variable `brainwork_any` treats zero as no evening brainwork and any positive value as evening brainwork.
-- The meaning of `tukevaruoka = 1` is not yet documented, so that value should not be recoded or analyzed until the codebook is corrected.
+- The raw `aivotyo` value is preserved. The analysis-ready binary 
 - Lagged variables are matched by exact calendar date. A missing diary date is not treated as an adjacent night.
 
 ## Repository structure
@@ -152,4 +151,3 @@ than:
 
 Johannes Piipponen
 
-R-based sleep diary and bedroom sensor data analysis.
