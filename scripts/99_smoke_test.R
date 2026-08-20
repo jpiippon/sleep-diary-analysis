@@ -50,7 +50,8 @@ script_paths <- c(
   here("scripts", "03_join_relevant_data.R"),
   here("scripts", "04_descriptives_and_plots.R"),
   here("scripts", "05_models.R"),
-  here("scripts", "06_fixed_effects_models.R")
+  here("scripts", "06_fixed_effects_models.R"),
+  here("scripts", "variable_specific", "health.R")
 )
 
 script_paths <- script_paths[file.exists(script_paths)]
@@ -96,7 +97,8 @@ assert_has_cols(
   c(
     "date", "series_id", "duration", "day_of_week", "bedtime",
     "coffee", "stress", "exercise", "health", "insomnia_num",
-    "phone_parking", "brainwork_any"
+    "baby_room_code", "child_night_context", "phone_parking",
+    "brainwork_any"
   ),
   "df_clean"
 )

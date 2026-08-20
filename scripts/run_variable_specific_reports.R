@@ -18,6 +18,7 @@ available_reports <- c(
   "exercise",
   "brainwork",
   "stress",
+  "health",
   "temperature",
   "coffee",
   "coffee_relationships"

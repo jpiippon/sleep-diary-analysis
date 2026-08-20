@@ -24,7 +24,7 @@ if (!file.exists(raw_path)) {
 required_cols <- c(
   "aika", "vknpv", "unituntia", "unettomuus", "myohaan",
   "urheilu", "kahvi", "ressi", "kipea", "mittaripaalla",
-  "puhelinparkki", "aivotyo"
+  "puhelinparkki", "vauvahuoneessa", "aivotyo"
 )
 
 weekday_levels_fi <- c("ma", "ti", "ke", "to", "pe", "la", "su")
@@ -121,6 +121,7 @@ sleep_diary <- df_raw |>
     stress_num = ressi,
     exercise_code = urheilu,
     health_num = kipea,
+    baby_room_code = vauvahuoneessa,
     insomnia_num = unettomuus
   ) |>
   filter(
@@ -189,6 +190,25 @@ sleep_diary <- df_raw |>
       ordered = TRUE
     ),
 
+    # Collapse child-specific codes into sleeping-arrangement categories.
+    # This variable describes nighttime context, not whether a child was sick.
+    child_night_context = factor(
+      case_when(
+        baby_room_code == 0 ~ 0L,
+        baby_room_code == 2 ~ 1L,
+        baby_room_code %in% c(1, 3, 5, 6) ~ 2L,
+        baby_room_code == 4 ~ 3L,
+        TRUE ~ NA_integer_
+      ),
+      levels = 0:3,
+      labels = c(
+        "No child nearby",
+        "Child in another room, within hearing",
+        "Child in same room",
+        "Children together; user elsewhere"
+      )
+    ),
+
     insomnia = factor(
       insomnia_num,
       levels = 0:2,
@@ -225,6 +245,7 @@ sleep_diary <- df_raw |>
     stress_num, stress,
     exercise_code, exercise,
     health_num, health,
+    baby_room_code, child_night_context,
     insomnia_num, insomnia,
     puhelinparkki, phone_parking,
     aivotyo, brainwork_any,
