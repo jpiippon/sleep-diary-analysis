@@ -127,12 +127,14 @@ binomial_summary <- function(data, group_vars) {
       n = n(),
       insomnia_n = sum(insomnia_any == 1, na.rm = TRUE),
       insomnia_rate = mean(insomnia_any == 1, na.rm = TRUE),
-      se = sqrt(insomnia_rate * (1 - insomnia_rate) / n),
-      ci_low = pmax(insomnia_rate - 1.96 * se, 0),
-      ci_high = pmin(insomnia_rate + 1.96 * se, 1),
       mean_sleep = mean(duration, na.rm = TRUE),
       median_sleep = median(duration, na.rm = TRUE),
       .groups = "drop"
+    ) |>
+    left_join(
+      grouped_mean_ci(data, group_vars, "insomnia_any", probability = TRUE) |>
+        select(all_of(group_vars), se = std_error, ci_low, ci_high),
+      by = group_vars
     ) |>
     mutate(
       across(
@@ -146,12 +148,7 @@ safe_feglm <- function(fml, data, model_name) {
   data <- prepare_nw_data(data, fml)
 
   tryCatch(
-    feglm(
-      fml = fml,
-      data = data,
-      family = binomial(link = "logit"),
-      vcov = NW(7) ~ series_id + date
-    ),
+    fit_nw(fml, data, family = binomial(link = "logit")),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
       NULL
@@ -163,7 +160,7 @@ safe_feglm <- function(fml, data, model_name) {
 # ANALYSIS DATA
 # =============================================================================
 
-dat_insomnia <- df_clean |>
+dat_insomnia <- sleep_diary_all |>
   mutate(
     year_month = factor(format(date, "%Y-%m")),
     year = factor(format(date, "%Y")),
@@ -197,7 +194,7 @@ dat_insomnia <- df_clean |>
     health,
     exercise
   ) |>
-  drop_na(insomnia_num, insomnia_any, duration)
+  drop_na(insomnia_num, insomnia_any)
 
 n_total <- nrow(dat_insomnia)
 insomnia_n <- sum(dat_insomnia$insomnia_any == 1, na.rm = TRUE)
@@ -300,10 +297,11 @@ yearly_insomnia_summary <- dat_insomnia |>
     insomnia_rate = mean(insomnia_any == 1, na.rm = TRUE),
     .groups = "drop"
   ) |>
+  left_join(
+    grouped_mean_ci(dat_insomnia, "year", "insomnia_any", probability = TRUE) |>
+      select(year, se = std_error, ci_low, ci_high), by = "year"
+  ) |>
   mutate(
-    se = sqrt(insomnia_rate * (1 - insomnia_rate) / n),
-    ci_low = pmax(insomnia_rate - 1.96 * se, 0),
-    ci_high = pmin(insomnia_rate + 1.96 * se, 1),
     n_label = paste0("n=", n),
     across(c(insomnia_rate, se, ci_low, ci_high), \(x) round(x, 3))
   )
@@ -964,3 +962,4 @@ cat("Supporting model-comparison figure saved to:", file.path(figure_dir, "insom
 cat("Supporting predicted-probability figure saved to:", file.path(figure_dir, "insomnia_figureS2_predicted_probabilities.png"), "\n")
 cat("Key findings saved to:", file.path(output_dir, "insomnia_key_findings.csv"), "\n")
 cat("Tables saved to:", output_dir, "\n")
+

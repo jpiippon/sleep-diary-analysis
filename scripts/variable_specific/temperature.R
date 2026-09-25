@@ -106,12 +106,7 @@ safe_feglm <- function(fml, data, model_name) {
   data <- prepare_nw_data(data, fml)
 
   tryCatch(
-    feglm(
-      fml = fml,
-      data = data,
-      family = binomial(link = "logit"),
-      vcov = NW(7) ~ series_id + date
-    ),
+    fit_nw(fml, data, family = binomial(link = "logit")),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
       NULL
@@ -187,15 +182,20 @@ temp_band_summary <- dat_temperature |>
     mean_sleep = mean(duration, na.rm = TRUE),
     median_sleep = median(duration, na.rm = TRUE),
     sd_sleep = sd(duration, na.rm = TRUE),
-    se_sleep = sd_sleep / sqrt(n),
-    ci_low = mean_sleep - 1.96 * se_sleep,
-    ci_high = mean_sleep + 1.96 * se_sleep,
     insomnia_n = sum(insomnia_any == 1, na.rm = TRUE),
     insomnia_rate = mean(insomnia_any == 1, na.rm = TRUE),
-    insomnia_se = sqrt(insomnia_rate * (1 - insomnia_rate) / n),
-    insomnia_ci_low = pmax(insomnia_rate - 1.96 * insomnia_se, 0),
-    insomnia_ci_high = pmin(insomnia_rate + 1.96 * insomnia_se, 1),
     .groups = "drop"
+  ) |>
+  left_join(
+    grouped_mean_ci(dat_temperature, "temp_band", "duration") |>
+      select(temp_band, se_sleep = std_error, ci_low, ci_high),
+    by = "temp_band"
+  ) |>
+  left_join(
+    grouped_mean_ci(dat_temperature, "temp_band", "insomnia_any", probability = TRUE) |>
+      select(temp_band, insomnia_se = std_error,
+             insomnia_ci_low = ci_low, insomnia_ci_high = ci_high),
+    by = "temp_band"
   ) |>
   mutate(
     distribution_label = paste0(fmt_pct(share, accuracy = 1), "\n(n=", n, ")"),
@@ -705,3 +705,4 @@ cat(
 cat("Recommended main figure saved to:", file.path(figure_dir, "temperature_figure1_main.png"), "\n")
 cat("Duration model-comparison figure saved to:", file.path(figure_dir, "temperature_figureS1_duration_model_comparison.png"), "\n")
 cat("Other figures saved to:", figure_dir, "\n")
+

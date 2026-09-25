@@ -95,12 +95,7 @@ safe_feglm <- function(fml, data, model_name) {
   data <- prepare_nw_data(data, fml)
 
   tryCatch(
-    feglm(
-      fml = fml,
-      data = data,
-      family = binomial(link = "logit"),
-      vcov = NW(7) ~ series_id + date
-    ),
+    fit_nw(fml, data, family = binomial(link = "logit")),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
       NULL
@@ -173,12 +168,14 @@ bedtime_summary <- dat_bedtime |>
     mean_sleep = mean(duration, na.rm = TRUE),
     median_sleep = median(duration, na.rm = TRUE),
     sd_sleep = sd(duration, na.rm = TRUE),
-    se_sleep = sd_sleep / sqrt(n),
-    ci_low = mean_sleep - 1.96 * se_sleep,
-    ci_high = mean_sleep + 1.96 * se_sleep,
     insomnia_onset_rate = mean(insomnia_onset == 1, na.rm = TRUE),
     insomnia_early_waking_rate = mean(insomnia_early_waking == 1, na.rm = TRUE),
     .groups = "drop"
+  ) |>
+  left_join(
+    grouped_mean_ci(dat_bedtime, "bedtime", "duration") |>
+      select(bedtime, se_sleep = std_error, ci_low, ci_high),
+    by = "bedtime"
   ) |>
   mutate(
     across(
@@ -1003,3 +1000,4 @@ cat("Supporting duration model figure saved to:", file.path(figure_dir, "bedtime
 cat("Supporting insomnia model figure saved to:", file.path(figure_dir, "bedtime_figureS2_insomnia_type_model_comparison.png"), "\n")
 cat("Supporting bedtime-over-time figure saved to:", file.path(figure_dir, "bedtime_figureS3_over_time.png"), "\n")
 cat("Supporting coffee/exercise figure saved to:", file.path(figure_dir, "bedtime_figureS4_coffee_exercise_context.png"), "\n")
+

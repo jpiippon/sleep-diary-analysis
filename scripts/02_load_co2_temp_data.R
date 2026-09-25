@@ -18,6 +18,7 @@ library(tidyverse)
 library(lubridate)
 library(hms)
 library(here)
+source(here("scripts", "helpers", "analysis_helpers.R"))
 
 mittari_path <- here("data", "raw", "mittari_kaikki.xlsx")
 
@@ -53,11 +54,12 @@ if (length(missing_cols) > 0) {
 mittari_clean <- mittari_raw |>
   transmute(
     datetime = if (is.POSIXct(aika)) {
-  force_tz(aika, tzone = "Europe/Helsinki")
-} else {
-  parse_date_time(aika, orders = c("mdy HMS", "m/d/y H:M:S", "mdy HM", "m/d/y H:M"),
-                  tz = "Europe/Helsinki")
-}, 
+      # Excel stores local clock readings without timezone information.
+      force_tz(aika, tzone = "Europe/Helsinki")
+    } else {
+      parse_date_time(aika, orders = c("ymd HMS", "mdy HMS", "ymd HM", "mdy HM"),
+                      tz = "Europe/Helsinki")
+    },
     co2 = clean_numeric(co2),
     temp = clean_numeric(temp),
     humid = clean_numeric(humid)
@@ -75,9 +77,9 @@ if (n_bad_datetime > 0) {
 }
 
 # Night window:
-# 22:00-08:00, where observations between 00:00 and 07:59 are assigned
+# 21:00-08:00, matching the diary codebook. Observations before 08:00 belong
 # to the previous calendar day.
-yo_start <- as_hms("22:00:00")
+yo_start <- as_hms("21:00:00")
 yo_end   <- as_hms("08:00:00")
 
 dat_mittari <- mittari_clean |>
@@ -85,7 +87,7 @@ dat_mittari <- mittari_clean |>
   mutate(
     clock_time = as_hms(datetime),
     in_night_window = (clock_time >= yo_start) | (clock_time < yo_end),
-    yo_pvm = as.Date(if_else(clock_time < yo_end, datetime - days(1), datetime))
+    yo_pvm = sensor_night_date(datetime)
   ) |>
   filter(in_night_window) |>
   group_by(yo_pvm) |>

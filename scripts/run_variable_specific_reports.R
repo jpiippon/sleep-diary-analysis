@@ -21,7 +21,8 @@ available_reports <- c(
   "health",
   "temperature",
   "coffee",
-  "coffee_relationships"
+  "coffee_relationships",
+  "magnesium"
 )
 
 if (!exists("reports_to_run")) {

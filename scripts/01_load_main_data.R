@@ -6,6 +6,8 @@
 # Data source: data/raw/loki.xlsx
 #
 # Output:
+#   - sleep_diary_all: valid diary rows, including missing sleep duration
+#   - diary_exclusions: row-level validation audit
 #   - sleep_diary: analysis-ready sleep diary data
 #   - df_clean: alias kept for downstream script compatibility
 # =============================================================================
@@ -30,67 +32,7 @@ required_cols <- c(
 weekday_levels_fi <- c("ma", "ti", "ke", "to", "pe", "la", "su")
 weekday_labels_en <- c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
-clean_numeric <- function(x) {
-  x |>
-    as.character() |>
-    stringr::str_replace_all(",", ".") |>
-    as.numeric()
-}
-
-# Return an n-day lag only when the earlier observation is exactly n calendar
-# days earlier. This prevents missing diary dates from being treated as
-# consecutive nights.
-lag_by_calendar_days <- function(x, date, n = 1L) {
-  if (length(x) != length(date)) {
-    stop("`x` and `date` must have the same length.")
-  }
-
-  if (length(n) != 1L || is.na(n) || n < 1 || n != as.integer(n)) {
-    stop("`n` must be one positive whole number.")
-  }
-
-  if (anyDuplicated(date) > 0) {
-    stop("Calendar lags require one observation per date.")
-  }
-
-  x[match(date - as.integer(n), date)]
-}
-
-calendar_series_id <- function(date) {
-  if (anyNA(date)) {
-    stop("Calendar sequences require non-missing dates.")
-  }
-
-  if (is.unsorted(date)) {
-    stop("Calendar sequences require dates sorted in ascending order.")
-  }
-
-  if (anyDuplicated(date) > 0) {
-    stop("Calendar sequences require one observation per date.")
-  }
-
-  cumsum(
-    tidyr::replace_na(
-      as.integer(date - dplyr::lag(date)) != 1L,
-      TRUE
-    )
-  )
-}
-
-prepare_nw_data <- function(data, fml = NULL) {
-  if (!"date" %in% names(data)) {
-    stop("Newey-West data must contain a `date` column.")
-  }
-
-  if (!is.null(fml)) {
-    formula_cols <- intersect(all.vars(fml), names(data))
-    data <- tidyr::drop_na(data, dplyr::all_of(formula_cols))
-  }
-
-  data <- data[order(data$date), , drop = FALSE]
-  data$series_id <- calendar_series_id(data$date)
-  data
-}
+source(here("scripts", "helpers", "analysis_helpers.R"))
 
 df_raw <- read_excel(raw_path, col_names = TRUE, na = c("", "NA"))
 
@@ -100,7 +42,17 @@ if (length(missing_cols) > 0) {
   stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
 }
 
-sleep_diary <- df_raw |>
+diary_validation <- validate_diary_rows(df_raw)
+diary_exclusions <- diary_validation$issues |>
+  mutate(date = as.Date(df_raw$aika[row]), excel_row = row + 1L) |>
+  select(excel_row, date, variable, value)
+
+cat("\nRows excluded for invalid or undefined values:",
+    length(diary_validation$rejected_rows), "\n")
+print(diary_exclusions, n = Inf)
+
+# Keep valid rows without duration for outcomes such as recorded insomnia.
+sleep_diary_all <- diary_validation$data |>
   mutate(
     date = as.Date(aika),
     reported_day_of_week = vknpv |>
@@ -126,10 +78,7 @@ sleep_diary <- df_raw |>
   ) |>
   filter(
     !is.na(date),
-    date <= Sys.Date(),
-    !is.na(duration),
-    # Zero-hour nights are valid observations; only negative values are invalid.
-    duration >= 0
+    date <= as.Date(Sys.time(), tz = "Europe/Helsinki")
   ) |>
   mutate(
     year = year(date),
@@ -256,11 +205,16 @@ sleep_diary <- df_raw |>
 # Identify uninterrupted daily sequences. These prevent time-series covariance
 # estimates from treating observations on opposite sides of a diary gap as
 # adjacent days.
-sleep_diary <- sleep_diary |>
+sleep_diary_all <- sleep_diary_all |>
   mutate(
     series_id = calendar_series_id(date)
   ) |>
   relocate(series_id, .after = date)
+
+# Preserve the existing duration-complete interface for downstream scripts.
+sleep_diary <- sleep_diary_all |>
+  filter(!is.na(duration)) |>
+  prepare_nw_data()
 
 if (anyDuplicated(sleep_diary$date) > 0) {
   stop("Duplicate diary dates found after cleaning; one row per date is required.")
@@ -293,3 +247,4 @@ cat("\nData types:\n")
 print(sapply(df_clean, class))
 
 cat("\n✓ Sleep diary data cleaning complete.\n")
+

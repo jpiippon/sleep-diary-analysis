@@ -21,6 +21,8 @@ This repository contains R scripts for cleaning, joining, and analyzing sleep di
 
 ## Data handling
 - Treat raw data files as immutable.
+- Exclude entire diary rows with invalid or undefined values using the shared validation rules and retain an audit. This includes undocumented `tukevaruoka = 1` under the owner's exclusion policy.
+- Keep `sleep_diary_all` for valid observations without duration; preserve `sleep_diary` and `df_clean` as duration-complete interfaces.
 - Do not silently recode variables in ways that drop valid values.
 - Preserve both raw coded variables and readable labeled variables when useful for analysis.
 - Preserve zero-hour sleep records. They are valid observed nights, not missing or invalid durations.

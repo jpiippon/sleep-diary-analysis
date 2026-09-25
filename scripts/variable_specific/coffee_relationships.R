@@ -94,7 +94,7 @@ safe_feglm <- function(fml, data, model_name) {
   data <- prepare_nw_data(data, fml)
 
   tryCatch(
-    feglm(fml = fml, data = data, family = binomial(link = "logit"), vcov = NW(7) ~ series_id + date),
+    fit_nw(fml, data, family = binomial(link = "logit")),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
       NULL
@@ -103,31 +103,14 @@ safe_feglm <- function(fml, data, model_name) {
 }
 
 rate_summary <- function(data, group_var, outcome_var) {
-  data |>
-    group_by({{ group_var }}) |>
-    summarise(
-      n = n(),
-      outcome_n = sum({{ outcome_var }} == 1, na.rm = TRUE),
-      rate = mean({{ outcome_var }} == 1, na.rm = TRUE),
-      se = sqrt(rate * (1 - rate) / n),
-      ci_low = pmax(rate - 1.96 * se, 0),
-      ci_high = pmin(rate + 1.96 * se, 1),
-      .groups = "drop"
-    ) |>
-    mutate(label = fmt_pct(rate, accuracy = 1))
+  grouped_mean_ci(data, rlang::as_name(rlang::enquo(group_var)),
+                  rlang::as_name(rlang::enquo(outcome_var)), probability = TRUE) |>
+    rename(rate = estimate) |>
+    mutate(outcome_n = round(rate * n), label = fmt_pct(rate, accuracy = 1))
 }
 
 mean_summary <- function(data, group_vars) {
-  data |>
-    group_by(across(all_of(group_vars))) |>
-    summarise(
-      n = n(),
-      mean_sleep = mean(duration, na.rm = TRUE),
-      se = sd(duration, na.rm = TRUE) / sqrt(n),
-      ci_low = mean_sleep - 1.96 * se,
-      ci_high = mean_sleep + 1.96 * se,
-      .groups = "drop"
-    )
+  grouped_mean_ci(data, group_vars, "duration") |> rename(mean_sleep = estimate)
 }
 
 # =============================================================================
@@ -583,3 +566,4 @@ cat("Supporting coffee relationship figures saved to:", figure_dir, "\n")
 cat("Recommended supporting overview figure: coffee_figureS13_any_coffee_bedtime_exercise_main.png\n")
 cat("Context-check figures saved to: coffee_figureS20_context_bedtime.png, coffee_figureS21_context_previous_sleep.png, coffee_figureS22_context_exercise.png\n")
 cat("Optional stress check saved to: coffee_figureS23_context_stress.png\n")
+

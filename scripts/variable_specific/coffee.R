@@ -47,6 +47,12 @@
 #     coffee to sleep. It is therefore included only as a sensitivity check.
 #   - Year-specific estimates are exploratory and should not be interpreted as
 #     proof that the effect of coffee changed.
+#   - Previous 3- and 5-night sums exclude the current night and require every
+#     calendar night. They measure sleep history, not a diagnosed sleep debt.
+#   - Sleep medication is recorded after coffee and may respond to expected
+#     sleep problems. Adjustment, restriction, and interaction checks are
+#     descriptive sensitivities, not estimates of a pharmacological effect.
+#     Codes 1/2 may have changed meaning, so only any/none is compared.
 #   - All results are associations, not causal effects.
 # =============================================================================
 
@@ -126,11 +132,7 @@ safe_feols <- function(fml, data, model_name) {
   model_data <- prepare_nw_data(data, fml)
 
   tryCatch(
-    feols(
-      fml = fml,
-      data = model_data,
-      vcov = NW(7) ~ series_id + date
-    ),
+    fit_nw(fml, model_data),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
       NULL
@@ -164,7 +166,7 @@ extract_binary_coffee_result <- function(model, model_name) {
 
   tibble(
     model = model_name,
-    n = nobs(model),
+    n = nobs(.env$model),
     estimate_minutes = estimate * 60,
     ci_low_minutes = (estimate - 1.96 * std_error) * 60,
     ci_high_minutes = (estimate + 1.96 * std_error) * 60,
@@ -199,6 +201,13 @@ dat_coffee <- df_clean |>
       labels = c("No coffee", "Any coffee")
     ),
     prev_duration = lag_by_calendar_days(duration, date, 1),
+    prev_sleep_sum3 = previous_sleep_sum(duration, date, 3),
+    prev_sleep_sum5 = previous_sleep_sum(duration, date, 5),
+    sleep_medicine_any = case_when(
+      unilaake == 0 ~ 0L,
+      unilaake %in% 1:2 ~ 1L,
+      TRUE ~ NA_integer_
+    ),
     prev_short_num = case_when(
       is.na(prev_duration) ~ NA_integer_,
       prev_duration < short_sleep_cutoff ~ 1L,
@@ -225,6 +234,9 @@ dat_coffee <- df_clean |>
     day_of_week,
     duration,
     prev_duration,
+    prev_sleep_sum3,
+    prev_sleep_sum5,
+    sleep_medicine_any,
     prev_short_num,
     prev_sleep_group,
     coffee_code,
@@ -272,19 +284,12 @@ year_coverage <- dat_coffee |>
     rate_label = fmt_pct(coffee_rate)
   )
 
-previous_sleep_summary <- dat_coffee |>
-  drop_na(prev_sleep_group) |>
-  group_by(prev_sleep_group) |>
-  summarise(
-    n = n(),
-    coffee_days = sum(coffee_any_num == 1),
-    coffee_rate = mean(coffee_any_num),
-    se = sqrt(coffee_rate * (1 - coffee_rate) / n),
-    ci_low = pmax(0, coffee_rate - 1.96 * se),
-    ci_high = pmin(1, coffee_rate + 1.96 * se),
-    .groups = "drop"
-  ) |>
-  mutate(label = paste0(fmt_pct(coffee_rate), "\n(n=", n, ")"))
+previous_sleep_summary <- grouped_mean_ci(
+  dat_coffee, "prev_sleep_group", "coffee_any_num", probability = TRUE
+) |>
+  rename(coffee_rate = estimate) |>
+  mutate(coffee_days = round(coffee_rate * n),
+         label = paste0(fmt_pct(coffee_rate), "\n(n=", n, ")"))
 
 duration_summary <- dat_coffee |>
   group_by(coffee_any) |>
@@ -372,6 +377,11 @@ models_pooled <- list(
     data = dat_pooled_model,
     model_name = "Calendar-adjusted pooled coffee model"
   ),
+  "Previous sleep only" = safe_feols(
+    duration ~ coffee_any_num + prev_duration + day_of_week | year_month,
+    data = dat_pooled_model,
+    model_name = "Calendar plus previous-night sleep only"
+  ),
   "Previous-sleep adjusted" = safe_feols(
     duration ~
       coffee_any_num +
@@ -450,6 +460,96 @@ if (!is.null(model_short_sleep_interaction)) {
   cat("\n========== COFFEE X PREVIOUS-NIGHT SHORT-SLEEP SENSITIVITY ==========\n")
   print(summary(model_short_sleep_interaction))
 }
+
+# =============================================================================
+# SENSITIVITY: PREVIOUS 3/5 NIGHTS AND SLEEP MEDICATION
+# =============================================================================
+
+# One common sample keeps the first four history estimates comparable. The
+# no-medication restriction uses a selected subset and is labeled separately.
+dat_history <- dat_pooled_model |>
+  drop_na(prev_sleep_sum3, prev_sleep_sum5, sleep_medicine_any)
+
+history_models <- list(
+  "Previous night" = safe_feols(
+    duration ~ coffee_any_num + prev_duration + stress + health + exercise +
+      day_of_week | year_month, dat_history, "History baseline"
+  ),
+  "Plus 3-night total" = safe_feols(
+    duration ~ coffee_any_num + prev_duration + prev_sleep_sum3 + stress +
+      health + exercise + day_of_week | year_month, dat_history, "3-night history"
+  ),
+  "Plus 5-night total" = safe_feols(
+    duration ~ coffee_any_num + prev_duration + prev_sleep_sum5 + stress +
+      health + exercise + day_of_week | year_month, dat_history, "5-night history"
+  ),
+  "5-night total + medication" = safe_feols(
+    duration ~ coffee_any_num + prev_duration + prev_sleep_sum5 +
+      sleep_medicine_any + stress + health + exercise + day_of_week | year_month,
+    dat_history, "Medication-adjusted sensitivity"
+  ),
+  "No medication (subset)" = safe_feols(
+    duration ~ coffee_any_num + prev_duration + prev_sleep_sum5 + stress +
+      health + exercise + day_of_week | year_month,
+    dat_history |> filter(sleep_medicine_any == 0), "No-medication subset"
+  )
+) |> purrr::compact()
+
+history_results <- purrr::imap_dfr(history_models, extract_binary_coffee_result) |>
+  mutate(model = factor(model, levels = rev(names(history_models))))
+
+model_previous_sleep_context <- safe_feols(
+  duration ~ coffee_any_num * prev_short_num + prev_duration + prev_sleep_sum5 +
+    stress + health + exercise + day_of_week | year_month,
+  dat_history, "Coffee by previous sleep with 5-night history"
+)
+
+model_medication_context <- safe_feols(
+  duration ~ coffee_any_num * sleep_medicine_any + prev_duration + prev_sleep_sum5 +
+    stress + health + exercise + day_of_week | year_month,
+  dat_history, "Coffee by medication sensitivity"
+)
+
+coffee_contrasts <- function(model, modifier, labels) {
+  if (is.null(model)) return(tibble())
+  terms <- names(coef(model))
+  interaction <- paste0("coffee_any_num:", modifier)
+  if (!all(c("coffee_any_num", interaction) %in% terms)) return(tibble())
+  purrr::map_dfr(0:1, function(level) {
+    contrast <- as.numeric(terms == "coffee_any_num") +
+      level * as.numeric(terms == interaction)
+    estimate <- sum(contrast * coef(model))
+    std_error <- sqrt(drop(t(contrast) %*% vcov(model) %*% contrast))
+    tibble(context = labels[level + 1L], estimate_minutes = estimate * 60,
+           ci_low_minutes = (estimate - 1.96 * std_error) * 60,
+           ci_high_minutes = (estimate + 1.96 * std_error) * 60)
+  })
+}
+
+previous_sleep_contrasts <- coffee_contrasts(
+  model_previous_sleep_context, "prev_short_num",
+  c("Previous night >=6 h", "Previous night <6 h")
+)
+medication_contrasts <- coffee_contrasts(
+  model_medication_context, "sleep_medicine_any",
+  c("No sleep medication", "Any sleep medication")
+)
+
+cat("\n========== SLEEP HISTORY AND MEDICATION SENSITIVITIES ==========\n")
+cat("Common 3/5-night history sample:", nrow(dat_history), "\n")
+print(dat_history |> count(prev_sleep_group, coffee_any, sleep_medicine_any), n = Inf)
+print(history_results, n = Inf, width = Inf)
+print(previous_sleep_contrasts, n = Inf)
+print(medication_contrasts, n = Inf)
+purrr::iwalk(history_models, \(model, label) {
+  cat("\n---", label, "---\n")
+  print(summary(model))
+})
+# Interaction coefficients test differences between contexts; separate
+# significance in one subgroup and not the other does not establish a difference.
+purrr::walk(list(model_previous_sleep_context, model_medication_context) |>
+              purrr::compact(), \(model) print(summary(model)))
+
 
 # =============================================================================
 # YEAR-SPECIFIC MODELS
@@ -777,7 +877,7 @@ p_main <- (p_yearly_coffee + p_coffee_after_short) /
     ),
     caption = str_wrap(
       paste(
-        "Panel B uses an exact 1-day calendar lag.",
+        "Panel B uses an exact 1-day calendar lag and Newey-West intervals.",
         "Panel D compares any coffee with no coffee and adjusts for previous-night sleep, stress, health, exercise, weekday, and month;",
         "95% CIs use a 7-day Newey-West estimator.",
         partial_year_note,
@@ -835,7 +935,7 @@ p_pooled_model_comparison <- pooled_results |>
   ) +
   coord_cartesian(clip = "off") +
   labs(
-    title = "Previous-night sleep changes the pooled coffee estimate",
+    title = "Coffee estimates across adjustment steps",
     subtitle = "Any coffee versus no coffee, using the same complete-case sample",
     caption = str_wrap(
       "Bedtime may be part of the coffee-to-sleep pathway, so the bedtime-adjusted model is a sensitivity check.",
@@ -922,6 +1022,41 @@ p_category_composition <- yearly_category_summary |>
   theme_sleep() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+context_plot_data <- bind_rows(
+  previous_sleep_contrasts |> mutate(panel = "Previous-night sleep"),
+  medication_contrasts |> mutate(panel = "Medication sensitivity")
+)
+
+p_previous_sleep_sensitivity <- if (nrow(context_plot_data) > 0) {
+  context_plot_data |>
+    ggplot(aes(x = estimate_minutes, y = context)) +
+    geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.35) +
+    geom_segment(aes(x = ci_low_minutes, xend = ci_high_minutes, yend = context),
+                 color = col_dark_blue, linewidth = 1.1) +
+    geom_point(color = col_orange, size = 2.7) +
+    facet_wrap(~panel, ncol = 1, scales = "free_y") +
+    labs(title = "Coffee associations by sleep and medication context",
+         subtitle = "Any coffee versus none; previous night and 5-night total adjusted",
+         x = "Difference in sleep duration (minutes)", y = NULL,
+         caption = str_wrap("95% Newey-West intervals. Medication groups are selected by behavior; these contrasts do not measure whether medication counteracts coffee.", 105)) +
+    theme_sleep() + theme(panel.grid.major.x = element_line(color = "grey90"))
+} else {
+  empty_plot("Not enough variation to estimate context-specific associations")
+}
+
+p_history_medicine_sensitivity <- history_results |>
+  ggplot(aes(x = estimate_minutes, y = model)) +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.35) +
+  geom_segment(aes(x = ci_low_minutes, xend = ci_high_minutes, yend = model),
+               color = col_dark_blue, linewidth = 1.1) +
+  geom_point(color = col_orange, size = 2.7) +
+  labs(title = "Coffee estimates with recent sleep history",
+       subtitle = "First four models use the same nights; the last uses a selected subset",
+       x = "Difference in sleep duration (minutes)", y = NULL,
+       caption = str_wrap("95% Newey-West intervals. Totals use the preceding 3 or 5 calendar nights. Medication adjustment is a sensitivity analysis, not a causal correction.", 105)) +
+  theme_sleep() + theme(panel.grid.major.x = element_line(color = "grey90"))
+
+
 # Only the complete four-panel figure is saved for the main public-facing
 # output. Its individual panels are not written as separate files.
 figures_to_save <- list(
@@ -939,6 +1074,12 @@ figures_to_save <- list(
     plot = p_category_sensitivity,
     width = 10,
     height = 6
+  ),
+  "coffee_figureS4_previous_sleep_sensitivity.png" = list(
+    plot = p_previous_sleep_sensitivity, width = 10, height = 6
+  ),
+  "coffee_figureS5_history_medicine_sensitivity.png" = list(
+    plot = p_history_medicine_sensitivity, width = 10, height = 7
   ),
   "coffee_figureS3_timing_composition_over_time.png" = list(
     plot = p_category_composition,

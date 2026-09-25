@@ -160,12 +160,7 @@ safe_feglm <- function(fml, data, model_name) {
   model_data <- prepare_nw_data(data, fml)
 
   tryCatch(
-    feglm(
-      fml = fml,
-      data = model_data,
-      family = binomial(link = "logit"),
-      vcov = NW(7) ~ series_id + date
-    ),
+    fit_nw(fml, model_data, family = binomial(link = "logit")),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
       NULL
@@ -195,7 +190,7 @@ extract_duration_result <- function(model, model_name) {
 
   tibble(
     model = model_name,
-    n = nobs(model),
+    n = nobs(.env$model),
     estimate_minutes = estimate * 60,
     ci_low_minutes = (estimate - 1.96 * std_error) * 60,
     ci_high_minutes = (estimate + 1.96 * std_error) * 60,
@@ -214,7 +209,7 @@ extract_odds_ratio <- function(model, model_name, outcome_name) {
   tibble(
     outcome = outcome_name,
     model = model_name,
-    n = nobs(model),
+    n = nobs(.env$model),
     odds_ratio = exp(estimate),
     ci_low = exp(estimate - 1.96 * std_error),
     ci_high = exp(estimate + 1.96 * std_error),
