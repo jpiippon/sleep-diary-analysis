@@ -66,12 +66,17 @@ calendar_mean_ci <- function(value, date, probability = FALSE) {
   n <- nrow(data)
   estimate <- mean(data$value)
   bounds <- c(NA_real_, NA_real_)
+  std_error <- NA_real_
   if (n > 1L && length(unique(data$value)) == 1L) bounds <- rep(estimate, 2)
+  if (n > 1L && length(unique(data$value)) == 1L) std_error <- 0
   if (n > 1L && length(unique(data$value)) > 1L) {
-    bounds <- as.numeric(stats::confint(fit_nw(value ~ 1, data)))
+    model <- fit_nw(value ~ 1, data)
+    bounds <- as.numeric(stats::confint(model))
+    std_error <- unname(fixest::se(model)[1])
   }
   if (probability) bounds <- pmin(1, pmax(0, bounds))
-  tibble::tibble(n = n, estimate = estimate, ci_low = bounds[1], ci_high = bounds[2])
+  tibble::tibble(n = n, estimate = estimate, std_error = std_error,
+                 ci_low = bounds[1], ci_high = bounds[2])
 }
 
 grouped_mean_ci <- function(data, groups, outcome, probability = FALSE) {
@@ -99,7 +104,8 @@ grouped_mean_ci <- function(data, groups, outcome, probability = FALSE) {
     upper <- pmin(1, upper)
   }
   keys |> dplyr::select(-.group) |>
-    dplyr::mutate(estimate = estimate, ci_low = lower, ci_high = upper)
+    dplyr::mutate(estimate = estimate, std_error = std_error,
+                  ci_low = lower, ci_high = upper)
 }
 
 sensor_night_date <- function(datetime, end_hour = 8L) {

@@ -76,7 +76,8 @@ Reporting regressions use seven-day Newey-West covariance estimates, with
 uninterrupted daily sequences separated after complete-case filtering.
 `fit_nw()` also rebuilds sequences if fixed effects remove observations, as can
 happen with constant-outcome months in logistic models. Summaries report the
-retained sample. Coffee descriptive intervals estimate group means together,
+retained sample. Descriptive intervals in the coffee, bedtime, weekday,
+temperature, and insomnia reports estimate group means together,
 retaining intervening observed days in other groups.
 
 Year-specific results and interactions are exploratory. Fixed effects do not

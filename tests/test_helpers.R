@@ -40,3 +40,10 @@ reference <- feglm(y ~ x | month, retained, family = binomial(),
 stopifnot(nobs(model) == nrow(retained),
           isTRUE(all.equal(unname(vcov(model)), unname(vcov(reference)), tolerance = 1e-9)))
 cat("Calendar, validation, and estimation-sample tests passed.\n")
+
+group_data <- dat |> mutate(group = factor(rep(c("a", "b"), length.out = n())))
+intervals <- grouped_mean_ci(group_data, "group", "x")
+observed_means <- group_data |> group_by(group) |> summarise(estimate = mean(x))
+stopifnot(isTRUE(all.equal(intervals$estimate, observed_means$estimate, tolerance = 1e-9)),
+          all(intervals$ci_low <= intervals$estimate),
+          all(intervals$ci_high >= intervals$estimate))

@@ -39,6 +39,8 @@ run_report_checks <- function() {
   writexl::write_xlsx(diary, file.path(fixture, "data", "raw", "loki.xlsx"))
 
   sensor <- tidyr::crossing(date = dates, hour = c(21:23, 0:7)) |>
+    # The local 03:00 hour does not exist on these spring-transition mornings.
+    filter(!(hour == 3 & date %in% as.Date(c("2023-03-25", "2024-03-30", "2025-03-29")))) |>
     mutate(aika = paste(date + as.integer(hour < 8), sprintf("%02d:00:00", hour)),
            co2 = 800 + 150 * sin(as.numeric(date) / 60) + rnorm(n(), sd = 70),
            temp = 23 + 4 * sin(as.numeric(date) / 60) + rnorm(n(), sd = .3),
@@ -50,7 +52,9 @@ run_report_checks <- function() {
   source("scripts/99_smoke_test.R", local = .GlobalEnv)
   stopifnot(nrow(sleep_diary_all) == nrow(df_clean) + 1L,
             length(diary_validation$rejected_rows) == 3L,
-            all(dat_mittari$n_obs == 11L),
+            all(dat_mittari$n_obs == if_else(
+              dat_mittari$yo_pvm %in% as.Date(c("2023-03-25", "2024-03-30", "2025-03-29")),
+              10L, 11L)),
             all(dat_mittari$yo_pvm == dates))
   source("scripts/05_models.R", local = .GlobalEnv)
   source("scripts/08_lag_effect.R", local = .GlobalEnv)

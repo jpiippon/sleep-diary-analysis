@@ -140,10 +140,12 @@ binomial_summary <- function(data, group_vars) {
       n = n(),
       insomnia_n = sum(insomnia_any == 1, na.rm = TRUE),
       insomnia_rate = mean(insomnia_any == 1, na.rm = TRUE),
-      se = sqrt(insomnia_rate * (1 - insomnia_rate) / n),
-      ci_low = pmax(insomnia_rate - 1.96 * se, 0),
-      ci_high = pmin(insomnia_rate + 1.96 * se, 1),
       .groups = "drop"
+    ) |>
+    left_join(
+      grouped_mean_ci(data, group_vars, "insomnia_any", probability = TRUE) |>
+        select(all_of(group_vars), se = std_error, ci_low, ci_high),
+      by = group_vars
     ) |>
     mutate(across(c(insomnia_rate, se, ci_low, ci_high), \(x) round(x, 3)))
 }
@@ -195,15 +197,20 @@ weekday_summary <- dat_weekday |>
     mean_sleep = mean(duration, na.rm = TRUE),
     median_sleep = median(duration, na.rm = TRUE),
     sd_sleep = sd(duration, na.rm = TRUE),
-    se_sleep = sd_sleep / sqrt(n),
-    ci_low = mean_sleep - 1.96 * se_sleep,
-    ci_high = mean_sleep + 1.96 * se_sleep,
     insomnia_n = sum(insomnia_any == 1, na.rm = TRUE),
     insomnia_rate = mean(insomnia_any == 1, na.rm = TRUE),
-    insomnia_se = sqrt(insomnia_rate * (1 - insomnia_rate) / n),
-    insomnia_ci_low = pmax(insomnia_rate - 1.96 * insomnia_se, 0),
-    insomnia_ci_high = pmin(insomnia_rate + 1.96 * insomnia_se, 1),
     .groups = "drop"
+  ) |>
+  left_join(
+    grouped_mean_ci(dat_weekday, "day_of_week", "duration") |>
+      select(day_of_week, se_sleep = std_error, ci_low, ci_high),
+    by = "day_of_week"
+  ) |>
+  left_join(
+    grouped_mean_ci(dat_weekday, "day_of_week", "insomnia_any", probability = TRUE) |>
+      select(day_of_week, insomnia_se = std_error,
+             insomnia_ci_low = ci_low, insomnia_ci_high = ci_high),
+    by = "day_of_week"
   ) |>
   mutate(
     distribution_label = paste0(fmt_pct(share, accuracy = 1), "\n(n=", n, ")"),
@@ -784,4 +791,3 @@ cat("Recommended main figure saved to:", file.path(figure_dir, "weekday_figure1_
 cat("Duration model-comparison figure saved to:", file.path(figure_dir, "weekday_figureS1_duration_model_comparison.png"), "\n")
 cat("Key findings saved to:", file.path(output_dir, "weekday_key_findings.csv"), "\n")
 cat("Tables saved to:", output_dir, "\n")
-

@@ -99,9 +99,11 @@ summary(m2)
 
 cat("\n========== MODEL COMPARISON (OLS) ==========\n")
 
-# Nested F-test
+# Robust joint test of the terms added to the baseline model.
 m1_nw <- fit_nw(formula(m1), df_model)
 m2_nw <- fit_nw(formula(m2), df_model)
+print(summary(m1_nw))
+print(summary(m2_nw))
 f_test <- fixest::wald(m2_nw, keep = "coffee|day_of_week", print = FALSE)
 cat("\nNewey-West Wald test of added coffee and weekday terms:\n")
 print(f_test)
@@ -137,7 +139,10 @@ summary(m3)
 # Odds ratios with confidence intervals
 cat("\nOdds Ratios:\n")
 m3_nw <- fit_nw(formula(m3), df_model, family = binomial(link = "logit"))
-or_table <- tidy(m3_nw, conf.int = TRUE, exponentiate = TRUE) |>
+print(summary(m3_nw))
+or_estimates <- tidy(m3_nw, conf.int = TRUE) |>
+  mutate(across(c(estimate, conf.low, conf.high), exp))
+or_table <- or_estimates |>
   filter(term != "(Intercept)") |>
   select(term, OR = estimate, lower = conf.low, upper = conf.high, p.value) |>
   mutate(across(where(is.numeric), \(x) round(x, 3)))
@@ -179,7 +184,7 @@ ggsave(here("figures", "13_ols_coefficients.png"), p_coef_ols,
 # VISUALIZATION 2: ODDS RATIO PLOT — LOGISTIC MODEL
 # =============================================================================
 
-or_plot_data <- tidy(m3_nw, conf.int = TRUE, exponentiate = TRUE) |>
+or_plot_data <- or_estimates |>
   filter(term != "(Intercept)") |>
   mutate(term = fct_reorder(term, estimate))
 
