@@ -16,9 +16,9 @@ lag_by_calendar_days <- function(x, date, n = 1L) {
 
 previous_sleep_sum <- function(x, date, nights) {
   # Every preceding calendar night is required; the current night is excluded.
+  x <- as.numeric(x)
   purrr::map(seq_len(nights), \(k) lag_by_calendar_days(x, date, k)) |>
-    do.call(what = cbind) |>
-    rowSums(na.rm = FALSE)
+    purrr::reduce(`+`)
 }
 
 calendar_series_id <- function(date) {
@@ -72,6 +72,34 @@ calendar_mean_ci <- function(value, date, probability = FALSE) {
   }
   if (probability) bounds <- pmin(1, pmax(0, bounds))
   tibble::tibble(n = n, estimate = estimate, ci_low = bounds[1], ci_high = bounds[2])
+}
+
+grouped_mean_ci <- function(data, groups, outcome, probability = FALSE) {
+  # Estimate all group means together so intervening days in other groups stay
+  # in the time series. Subsetting each group first would lose these lag pairs.
+  sample <- data |>
+    tidyr::drop_na(dplyr::all_of(c("date", groups, outcome))) |>
+    dplyr::mutate(.value = .data[[outcome]],
+                  .group = interaction(dplyr::pick(dplyr::all_of(groups)), drop = TRUE))
+  keys <- sample |>
+    dplyr::count(dplyr::across(dplyr::all_of(c(groups, ".group"))), name = "n")
+  if (nrow(keys) == 1L) {
+    ci <- calendar_mean_ci(sample$.value, sample$date, probability)
+    return(dplyr::bind_cols(keys |> dplyr::select(-.group), ci |> dplyr::select(-n)))
+  }
+  model <- fit_nw(.value ~ .group, sample)
+  contrasts <- stats::model.matrix(~ .group, keys)
+  contrasts <- contrasts[, names(coef(model)), drop = FALSE]
+  estimate <- drop(contrasts %*% coef(model))
+  std_error <- sqrt(rowSums((contrasts %*% vcov(model)) * contrasts))
+  lower <- estimate - 1.96 * std_error
+  upper <- estimate + 1.96 * std_error
+  if (probability) {
+    lower <- pmax(0, lower)
+    upper <- pmin(1, upper)
+  }
+  keys |> dplyr::select(-.group) |>
+    dplyr::mutate(estimate = estimate, ci_low = lower, ci_high = upper)
 }
 
 sensor_night_date <- function(datetime, end_hour = 8L) {

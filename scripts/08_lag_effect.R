@@ -2,11 +2,10 @@
 # 08_lag_effect.R
 #
 # Purpose: Examine how sleep duration of previous nights (1, 2, or 3 nights
-#          back) impacts current sleep duration.
+#          back) is associated with current sleep duration.
 #
 # Approach:
-#   - Create lagged duration variables based on diary-night order
-#     (data are already arranged by date in df_clean).
+#   - Create lagged duration variables matched by exact calendar date.
 #   - Fit simple OLS models:
 #       (1) duration_t ~ duration_{t-1}
 #       (2) duration_t ~ duration_{t-2}
@@ -65,10 +64,10 @@ dat_lag2 <- dat |> filter(!is.na(lag2_duration))
 dat_lag3 <- dat |> filter(!is.na(lag3_duration))
 dat_all_lags <- dat |> filter(complete.cases(cbind(lag1_duration, lag2_duration, lag3_duration)))
 
-m_lag1 <- lm(duration ~ lag1_duration, data = dat_lag1)
-m_lag2 <- lm(duration ~ lag2_duration, data = dat_lag2)
-m_lag3 <- lm(duration ~ lag3_duration, data = dat_lag3)
-m_all <- lm(duration ~ lag1_duration + lag2_duration + lag3_duration, data = dat_all_lags)
+m_lag1 <- fit_nw(duration ~ lag1_duration, data = dat_lag1)
+m_lag2 <- fit_nw(duration ~ lag2_duration, data = dat_lag2)
+m_lag3 <- fit_nw(duration ~ lag3_duration, data = dat_lag3)
+m_all <- fit_nw(duration ~ lag1_duration + lag2_duration + lag3_duration, data = dat_all_lags)
 
 cat("\n========== MODEL SUMMARIES ==========\n")
 cat("\n--- duration_t ~ duration_{t-1} ---\n")
@@ -165,8 +164,8 @@ coef_plot <- ggplot(
     )
   ) +
   labs(
-    title = "Lagged sleep duration effects",
-    subtitle = "OLS: current sleep duration vs previous 1-3 nights",
+    title = "Lagged sleep duration associations",
+    subtitle = "OLS with 7-day Newey-West intervals; exact calendar lags",
     x = "Estimate (hours)",
     y = NULL,
     color = NULL
@@ -183,3 +182,4 @@ ggsave(
 
 cat("\nSaved coefficient table to outputs/08_lag_effect_models.txt\n")
 cat("Saved coefficient plot to figures/19_lag_effect_coefficients.png\n")
+

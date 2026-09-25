@@ -29,6 +29,7 @@ jobs:
             any::here
             any::patchwork
             any::writexl
+            any::gridExtra
           cache-version: 1
       - name: Check calendar and validation rules
         run: Rscript tests/test_helpers.R
@@ -36,9 +37,9 @@ jobs:
         if: hashFiles('tests/test_reports.R') != ''
         run: Rscript tests/test_reports.R
       - name: Upload synthetic previews
-        if: always() && hashFiles('outputs/figures/**/*.png') != ''
+        if: always() && hashFiles('outputs/synthetic_test_previews/**/*.png') != ''
         uses: actions/upload-artifact@v4
         with:
           name: synthetic-report-previews
-          path: outputs/figures/variable_specific/
+          path: outputs/synthetic_test_previews/
           retention-days: 7

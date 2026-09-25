@@ -146,12 +146,7 @@ safe_feglm <- function(fml, data, model_name) {
   data <- prepare_nw_data(data, fml)
 
   tryCatch(
-    feglm(
-      fml = fml,
-      data = data,
-      family = binomial(link = "logit"),
-      vcov = NW(7) ~ series_id + date
-    ),
+    fit_nw(fml, data, family = binomial(link = "logit")),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
       NULL
@@ -163,7 +158,7 @@ safe_feglm <- function(fml, data, model_name) {
 # ANALYSIS DATA
 # =============================================================================
 
-dat_insomnia <- df_clean |>
+dat_insomnia <- sleep_diary_all |>
   mutate(
     year_month = factor(format(date, "%Y-%m")),
     year = factor(format(date, "%Y")),
@@ -197,7 +192,7 @@ dat_insomnia <- df_clean |>
     health,
     exercise
   ) |>
-  drop_na(insomnia_num, insomnia_any, duration)
+  drop_na(insomnia_num, insomnia_any)
 
 n_total <- nrow(dat_insomnia)
 insomnia_n <- sum(dat_insomnia$insomnia_any == 1, na.rm = TRUE)
@@ -964,3 +959,4 @@ cat("Supporting model-comparison figure saved to:", file.path(figure_dir, "insom
 cat("Supporting predicted-probability figure saved to:", file.path(figure_dir, "insomnia_figureS2_predicted_probabilities.png"), "\n")
 cat("Key findings saved to:", file.path(output_dir, "insomnia_key_findings.csv"), "\n")
 cat("Tables saved to:", output_dir, "\n")
+

@@ -160,12 +160,7 @@ safe_feglm <- function(fml, data, model_name) {
   model_data <- prepare_nw_data(data, fml)
 
   tryCatch(
-    feglm(
-      fml = fml,
-      data = model_data,
-      family = binomial(link = "logit"),
-      vcov = NW(7) ~ series_id + date
-    ),
+    fit_nw(fml, model_data, family = binomial(link = "logit")),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
       NULL
@@ -981,3 +976,4 @@ cat(
   "reflects overlapping self-reported concepts and is not independent causal",
   "confirmation.\n"
 )
+

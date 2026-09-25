@@ -8,7 +8,7 @@
 #   Model 2 (extended): duration ~ bedtime + stress + health + coffee + day_of_week
 #   Model 3 (logistic): insomnia (any vs none) ~ bedtime + stress + health + coffee
 #
-# Models are compared via AIC/BIC and nested F-test. Coefficient plots and
+# Models are compared via AIC/BIC and a Newey-West Wald test. Coefficient plots and
 # diagnostic plots are saved to figures/.
 #
 # Input:  df_clean from 01_load_main_data.R
@@ -58,9 +58,10 @@ theme_sleep <- function() {
 
 # Drop rows with any NA in model variables; create binary insomnia indicator
 df_model <- df_clean |>
-  select(duration, bedtime, coffee, stress, health, day_of_week, insomnia_num) |>
+  select(date, duration, bedtime, coffee, stress, health, day_of_week, insomnia_num) |>
   drop_na() |>
-  mutate(insomnia_bin = factor(ifelse(insomnia_num > 0, 1, 0)))
+  mutate(insomnia_bin = as.integer(insomnia_num > 0),
+         across(c(bedtime, coffee, health), ~ factor(.x, ordered = FALSE)))
 
 cat("\n========== MODELLING SAMPLE ==========\n")
 cat("Observations available:", nrow(df_model), "\n")
@@ -99,8 +100,10 @@ summary(m2)
 cat("\n========== MODEL COMPARISON (OLS) ==========\n")
 
 # Nested F-test
-f_test <- anova(m1, m2)
-cat("\nNested F-test (m1 vs m2):\n")
+m1_nw <- fit_nw(formula(m1), df_model)
+m2_nw <- fit_nw(formula(m2), df_model)
+f_test <- fixest::wald(m2_nw, keep = "coffee|day_of_week", print = FALSE)
+cat("\nNewey-West Wald test of added coffee and weekday terms:\n")
 print(f_test)
 
 # AIC / BIC comparison
@@ -133,7 +136,8 @@ summary(m3)
 
 # Odds ratios with confidence intervals
 cat("\nOdds Ratios:\n")
-or_table <- tidy(m3, conf.int = TRUE, exponentiate = TRUE) |>
+m3_nw <- fit_nw(formula(m3), df_model, family = binomial(link = "logit"))
+or_table <- tidy(m3_nw, conf.int = TRUE, exponentiate = TRUE) |>
   filter(term != "(Intercept)") |>
   select(term, OR = estimate, lower = conf.low, upper = conf.high, p.value) |>
   mutate(across(where(is.numeric), \(x) round(x, 3)))
@@ -144,8 +148,8 @@ print(or_table, n = Inf)
 # =============================================================================
 
 coef_data <- bind_rows(
-  tidy(m1, conf.int = TRUE) |> mutate(model = "M1: Base"),
-  tidy(m2, conf.int = TRUE) |> mutate(model = "M2: Extended")
+  tidy(m1_nw, conf.int = TRUE) |> mutate(model = "M1: Base"),
+  tidy(m2_nw, conf.int = TRUE) |> mutate(model = "M2: Extended")
 ) |>
   filter(term != "(Intercept)") |>
   mutate(term = fct_reorder(term, estimate))
@@ -175,7 +179,7 @@ ggsave(here("figures", "13_ols_coefficients.png"), p_coef_ols,
 # VISUALIZATION 2: ODDS RATIO PLOT — LOGISTIC MODEL
 # =============================================================================
 
-or_plot_data <- tidy(m3, conf.int = TRUE, exponentiate = TRUE) |>
+or_plot_data <- tidy(m3_nw, conf.int = TRUE, exponentiate = TRUE) |>
   filter(term != "(Intercept)") |>
   mutate(term = fct_reorder(term, estimate))
 
@@ -245,6 +249,6 @@ cat("M1 (base):     R² =", round(summary(m1)$r.squared, 3),
     "| Adj R² =", round(summary(m1)$adj.r.squared, 3), "\n")
 cat("M2 (extended): R² =", round(summary(m2)$r.squared, 3),
     "| Adj R² =", round(summary(m2)$adj.r.squared, 3), "\n")
-cat("M2 vs M1 F-test p =", format.pval(f_test$`Pr(>F)`[2], digits = 3), "\n")
+cat("M2 added terms, Newey-West Wald p =", format.pval(f_test$p, digits = 3), "\n")
 cat("M3 (logistic): AIC =", round(AIC(m3), 1), "\n")
 cat("\n✓ Models fitted and figures saved to figures/.\n")

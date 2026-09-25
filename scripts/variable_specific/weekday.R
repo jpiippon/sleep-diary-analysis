@@ -125,12 +125,7 @@ safe_feglm <- function(fml, data, model_name) {
   data <- prepare_nw_data(data, fml)
 
   tryCatch(
-    feglm(
-      fml = fml,
-      data = data,
-      family = binomial(link = "logit"),
-      vcov = NW(7) ~ series_id + date
-    ),
+    fit_nw(fml, data, family = binomial(link = "logit")),
     error = \(e) {
       warning("Model failed: ", model_name, ". Error: ", conditionMessage(e))
       NULL
@@ -789,3 +784,4 @@ cat("Recommended main figure saved to:", file.path(figure_dir, "weekday_figure1_
 cat("Duration model-comparison figure saved to:", file.path(figure_dir, "weekday_figureS1_duration_model_comparison.png"), "\n")
 cat("Key findings saved to:", file.path(output_dir, "weekday_key_findings.csv"), "\n")
 cat("Tables saved to:", output_dir, "\n")
+

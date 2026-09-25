@@ -44,17 +44,7 @@ cat("\n========== SMOKE TEST ==========\n")
 # 1. Parse scripts to catch syntax errors early
 # -----------------------------------------------------------------------------
 
-script_paths <- c(
-  here("scripts", "01_load_main_data.R"),
-  here("scripts", "02_load_co2_temp_data.R"),
-  here("scripts", "03_join_relevant_data.R"),
-  here("scripts", "04_descriptives_and_plots.R"),
-  here("scripts", "05_models.R"),
-  here("scripts", "06_fixed_effects_models.R"),
-  here("scripts", "variable_specific", "health.R")
-)
-
-script_paths <- script_paths[file.exists(script_paths)]
+script_paths <- list.files(here("scripts"), pattern = "\\.R$", recursive = TRUE, full.names = TRUE)
 
 invisible(lapply(script_paths, parse))
 
@@ -80,8 +70,8 @@ assert_true(nrow(df_clean) > 0, "`df_clean` has zero rows.")
 assert_true(all(df_clean$duration >= 0), "`df_clean` contains a negative sleep duration.")
 assert_true(anyDuplicated(df_clean$date) == 0, "`df_clean` contains duplicate diary dates.")
 
-raw_duration <- suppressWarnings(clean_numeric(df_raw$unituntia))
-raw_date <- as.Date(df_raw$aika)
+raw_duration <- suppressWarnings(clean_numeric(diary_validation$data$unituntia))
+raw_date <- as.Date(diary_validation$data$aika)
 expected_zero_n <- sum(
   raw_duration == 0 & !is.na(raw_date) & raw_date <= Sys.Date(),
   na.rm = TRUE
@@ -268,3 +258,4 @@ cat("\n✓ Smoke test completed successfully\n")
 source(here("scripts", "06_fixed_effects_models.R"))
 
 cat("✓ scripts/06_fixed_effects_models.R ran successfully\n")
+
