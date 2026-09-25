@@ -12,7 +12,7 @@ period, starting one day before the first recorded use.
 ## Run an analysis
 
 Open `Uni.Rproj`. Install `tidyverse`, `readxl`, `here`, `fixest`, `patchwork`,
-and `gridExtra`. Place the private input files in `data/raw/`:
+`gridExtra`, and `zoo`. Place the private input files in `data/raw/`:
 `loki.xlsx` and, for environmental analyses, `mittari_kaikki.xlsx`.
 
 ```r
@@ -36,4 +36,3 @@ See [analysis notes](docs/analysis_notes.md) for coding, exclusions, and model
 assumptions.
 
 Johannes Piipponen
-

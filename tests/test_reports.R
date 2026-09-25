@@ -8,6 +8,14 @@ run_report_checks <- function() {
   fixture <- tempfile("sleep-diary-check-")
   dir.create(fixture)
   on.exit(setwd(project), add = TRUE)
+  on.exit({
+    previews <- file.path(project, "outputs", "synthetic_test_previews")
+    dir.create(previews, recursive = TRUE, showWarnings = FALSE)
+    figures <- list.files(file.path(fixture, "outputs", "figures", "variable_specific"),
+                          pattern = "(coffee|magnesium)_figure(1_main|S[145]_).*png$",
+                          recursive = TRUE, full.names = TRUE)
+    file.copy(figures, previews, overwrite = TRUE)
+  }, add = TRUE)
   file.copy(file.path(project, "scripts"), fixture, recursive = TRUE)
   file.copy(file.path(project, "Uni.Rproj"), fixture)
   dir.create(file.path(fixture, "data", "raw"), recursive = TRUE)
@@ -66,10 +74,12 @@ run_report_checks <- function() {
   purrr::walk(reports, function(report) {
     cat("\nINTEGRATION REPORT:", report, "\n")
     source(file.path("scripts", "variable_specific", paste0(report, ".R")), local = .GlobalEnv)
+    if (report == "coffee") {
+      stopifnot(length(models_pooled) == 5L, length(history_models) == 5L,
+                nrow(previous_sleep_contrasts) == 2L, nrow(medication_contrasts) == 2L)
+    }
+    if (report == "magnesium") stopifnot(length(models) == 4L)
   })
-  previews <- file.path(project, "outputs", "synthetic_test_previews")
-  dir.create(previews, recursive = TRUE, showWarnings = FALSE)
-  file.copy("outputs/figures/variable_specific", previews, recursive = TRUE)
   cat("\nAll integration reports completed with synthetic data.\n")
 }
 

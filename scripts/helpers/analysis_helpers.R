@@ -95,8 +95,8 @@ grouped_mean_ci <- function(data, groups, outcome, probability = FALSE) {
   model <- fit_nw(.value ~ .group, sample)
   contrasts <- stats::model.matrix(~ .group, keys)
   contrasts <- contrasts[, names(coef(model)), drop = FALSE]
-  estimate <- drop(contrasts %*% coef(model))
-  std_error <- sqrt(rowSums((contrasts %*% vcov(model)) * contrasts))
+  estimate <- unname(drop(contrasts %*% coef(model)))
+  std_error <- unname(sqrt(rowSums((contrasts %*% vcov(model)) * contrasts)))
   lower <- estimate - 1.96 * std_error
   upper <- estimate + 1.96 * std_error
   if (probability) {
