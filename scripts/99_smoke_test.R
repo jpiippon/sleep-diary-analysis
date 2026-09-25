@@ -73,7 +73,7 @@ assert_true(anyDuplicated(df_clean$date) == 0, "`df_clean` contains duplicate di
 raw_duration <- suppressWarnings(clean_numeric(diary_validation$data$unituntia))
 raw_date <- as.Date(diary_validation$data$aika)
 expected_zero_n <- sum(
-  raw_duration == 0 & !is.na(raw_date) & raw_date <= Sys.Date(),
+  raw_duration == 0 & !is.na(raw_date) & raw_date <= as.Date(Sys.time(), tz = "Europe/Helsinki"),
   na.rm = TRUE
 )
 
@@ -258,4 +258,3 @@ cat("\n✓ Smoke test completed successfully\n")
 source(here("scripts", "06_fixed_effects_models.R"))
 
 cat("✓ scripts/06_fixed_effects_models.R ran successfully\n")
-

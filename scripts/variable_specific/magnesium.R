@@ -74,7 +74,7 @@ formulas <- list(
 )
 models <- purrr::map(formulas, \(fml) fit_nw(fml, dat_model))
 model_results <- purrr::imap_dfr(models, function(model, name) {
-  bounds <- confint(model, parm = "magnesium_num")
+  bounds <- unlist(confint(model, parm = "magnesium_num"), use.names = FALSE)
   tibble(model = name, n = nobs(.env$model),
          estimate_minutes = unname(coef(.env$model)["magnesium_num"]) * 60,
          ci_low_minutes = bounds[1] * 60, ci_high_minutes = bounds[2] * 60)

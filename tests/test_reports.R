@@ -71,8 +71,9 @@ run_report_checks <- function() {
   # main figure layout, and the newly added history and experiment analyses.
   reports <- c("coffee", "coffee_relationships", "magnesium", "insomnia",
                "stress", "brainwork", "bedtime", "weekday", "temperature", "exercise", "health")
-  purrr::walk(reports, function(report) {
+  failures <- purrr::map_chr(reports, function(report) {
     cat("\nINTEGRATION REPORT:", report, "\n")
+    tryCatch({
     source(file.path("scripts", "variable_specific", paste0(report, ".R")), local = .GlobalEnv)
     if (report == "coffee") {
       stopifnot(length(models_pooled) == 5L, length(history_models) == 5L,
@@ -83,7 +84,15 @@ run_report_checks <- function() {
       stopifnot(all(duration_results$ci_low <= duration_results$estimate),
                 all(duration_results$ci_high >= duration_results$estimate))
     }
+    ""
+    }, error = function(e) {
+      failure <- paste(report, conditionMessage(e), sep = ": ")
+      message("REPORT FAILURE: ", failure)
+      failure
+    })
   })
+  failures <- failures[nzchar(failures)]
+  if (length(failures) > 0) stop(paste(failures, collapse = "\n"), call. = FALSE)
   cat("\nAll integration reports completed with synthetic data.\n")
 }
 
