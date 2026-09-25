@@ -79,6 +79,10 @@ run_report_checks <- function() {
                 nrow(previous_sleep_contrasts) == 2L, nrow(medication_contrasts) == 2L)
     }
     if (report == "magnesium") stopifnot(length(models) == 4L)
+    if (report == "health") {
+      stopifnot(all(duration_results$ci_low <= duration_results$estimate),
+                all(duration_results$ci_high >= duration_results$estimate))
+    }
   })
   cat("\nAll integration reports completed with synthetic data.\n")
 }

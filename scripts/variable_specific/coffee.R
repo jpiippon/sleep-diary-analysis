@@ -166,7 +166,7 @@ extract_binary_coffee_result <- function(model, model_name) {
 
   tibble(
     model = model_name,
-    n = nobs(model),
+    n = nobs(.env$model),
     estimate_minutes = estimate * 60,
     ci_low_minutes = (estimate - 1.96 * std_error) * 60,
     ci_high_minutes = (estimate + 1.96 * std_error) * 60,
@@ -1124,4 +1124,3 @@ cat(
   "sample composition, or other unmeasured conditions changed; they are not",
   "causal effect estimates.\n"
 )
-

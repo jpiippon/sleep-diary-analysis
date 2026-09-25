@@ -190,11 +190,11 @@ extract_numeric_result <- function(
 
   tibble(
     model = model_name,
-    n = nobs(model),
+    n = nobs(.env$model),
     estimate = estimate * multiplier,
-    ci_low = (estimate - 1.96 * std_error) * multiplier,
-    ci_high = (estimate + 1.96 * std_error) * multiplier,
-    label = label_function(estimate * multiplier)
+    ci_low = (.env$estimate - 1.96 * std_error) * multiplier,
+    ci_high = (.env$estimate + 1.96 * std_error) * multiplier,
+    label = label_function(estimate)
   )
 }
 

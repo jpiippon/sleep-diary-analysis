@@ -177,7 +177,7 @@ extract_brainwork_result <- function(model, model_name) {
 
   tibble(
     model = model_name,
-    n = nobs(model),
+    n = nobs(.env$model),
     estimate_minutes = estimate * 60,
     ci_low_minutes = (estimate - 1.96 * std_error) * 60,
     ci_high_minutes = (estimate + 1.96 * std_error) * 60,
