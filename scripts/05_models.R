@@ -9,7 +9,7 @@
 #   Model 3 (logistic): insomnia (any vs none) ~ bedtime + stress + health + coffee
 #
 # Models are compared via AIC/BIC and a Newey-West Wald test. Coefficient plots and
-# diagnostic plots are saved to figures/.
+# diagnostic plots are saved to outputs/figures/core/.
 #
 # Input:  df_clean from 01_load_main_data.R
 # Output: Model summaries, comparison table, figures
@@ -23,7 +23,7 @@ source(here("scripts", "01_load_main_data.R"))
 
 if (!exists("df_clean")) stop("df_clean not found. Run 01_load_main_data.R first.")
 
-dir.create(here("figures"), showWarnings = FALSE)
+dir.create(here("outputs", "figures", "core"), showWarnings = FALSE, recursive = TRUE)
 
 # --- Color system (same as 04_descriptives_and_plots.R) ----------------------
 col_navy       <- "#002d5a"
@@ -177,7 +177,7 @@ p_coef_ols <- ggplot(coef_data, aes(x = estimate, y = term, color = model)) +
   theme(panel.grid.major.x = element_line(color = "grey90"))
 
 print(p_coef_ols)
-ggsave(here("figures", "13_ols_coefficients.png"), p_coef_ols,
+ggsave(here("outputs", "figures", "core", "13_ols_coefficients.png"), p_coef_ols,
        width = 10, height = 7, dpi = 300)
 
 # =============================================================================
@@ -204,7 +204,7 @@ p_or <- ggplot(or_plot_data, aes(x = estimate, y = term)) +
   theme(panel.grid.major.x = element_line(color = "grey90"))
 
 print(p_or)
-ggsave(here("figures", "14_insomnia_odds_ratios.png"), p_or,
+ggsave(here("outputs", "figures", "core", "14_insomnia_odds_ratios.png"), p_or,
        width = 10, height = 6, dpi = 300)
 
 # =============================================================================
@@ -242,7 +242,7 @@ p_diag2 <- ggplot(diag_data, aes(sample = .std.resid)) +
 p_diag <- gridExtra::arrangeGrob(p_diag1, p_diag2, ncol = 2,
                                   top = "Model 2 Diagnostics")
 grid::grid.draw(p_diag)
-ggsave(here("figures", "15_model_diagnostics.png"), p_diag,
+ggsave(here("outputs", "figures", "core", "15_model_diagnostics.png"), p_diag,
        width = 14, height = 6, dpi = 300)
 
 # =============================================================================
@@ -256,4 +256,4 @@ cat("M2 (extended): R² =", round(summary(m2)$r.squared, 3),
     "| Adj R² =", round(summary(m2)$adj.r.squared, 3), "\n")
 cat("M2 added terms, Newey-West Wald p =", format.pval(f_test$p, digits = 3), "\n")
 cat("M3 (logistic): AIC =", round(AIC(m3), 1), "\n")
-cat("\n✓ Models fitted and figures saved to figures/.\n")
+cat("\n✓ Models fitted and figures saved to outputs/figures/core/.\n")

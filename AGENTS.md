@@ -62,7 +62,7 @@ This repository contains R scripts for cleaning, joining, and analyzing sleep di
 - Prefer small diffs.
 - Keep the main numbered pipeline stable unless explicitly changing the core workflow.
 - Put focused one-variable reporting scripts in `scripts/variable_specific/`.
-- Put figures from focused one-variable reporting scripts in `outputs/figures/variable_specific/<variable_name>/`.
+- Save all generated figures under `outputs/figures/`. Use `core/` for core-pipeline figures and `variable_specific/<variable_name>/` for focused reports.
 - Do not add saved table outputs merely because a summary object exists.
 
 ## Variable-specific reporting scripts

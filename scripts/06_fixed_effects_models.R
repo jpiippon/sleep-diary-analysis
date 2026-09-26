@@ -35,7 +35,7 @@ if (!exists("sleep_mittari_sensor")) {
   stop("sleep_mittari_sensor not found. Run 03_join_relevant_data.R first.")
 }
 
-dir.create(here("figures"), showWarnings = FALSE)
+dir.create(here("outputs", "figures", "core"), showWarnings = FALSE, recursive = TRUE)
 dir.create(here("outputs"), showWarnings = FALSE)
 
 # =============================================================================
@@ -248,7 +248,7 @@ p_coef <- ggplot(
 print(p_coef)
 
 ggsave(
-  here("figures", "16_fixed_effects_coefficients.png"),
+  here("outputs", "figures", "core", "16_fixed_effects_coefficients.png"),
   p_coef,
   width = 10,
   height = 7,
@@ -318,7 +318,7 @@ p_partial_co2 <- ggplot(
 print(p_partial_co2)
 
 ggsave(
-  here("figures", "17_partial_co2_sleep.png"),
+  here("outputs", "figures", "core", "17_partial_co2_sleep.png"),
   p_partial_co2,
   width = 10,
   height = 6,
@@ -384,7 +384,7 @@ p_pred_co2 <- ggplot(pred_grid, aes(x = ka_co2, y = pred_duration)) +
 print(p_pred_co2)
 
 ggsave(
-  here("figures", "18_adjusted_prediction_co2.png"),
+  here("outputs", "figures", "core", "18_adjusted_prediction_co2.png"),
   p_pred_co2,
   width = 10,
   height = 6,
@@ -410,4 +410,4 @@ cat(
   "\n"
 )
 cat("Output written to:", here("outputs", "06_fixed_effects_models.txt"), "\n")
-cat("\n✓ Fixed-effects analysis complete. Figures saved to figures/.\n")
+cat("\n✓ Fixed-effects analysis complete. Figures saved to outputs/figures/core/.\n")

@@ -1,17 +1,18 @@
 # R and RStudio
-.Rhistory
-.Rproj.user/
+/.Rhistory
+/.Rproj.user/
 
 # Data
-data/raw/
-data/derived/
+/data/raw/
+/data/derived/
 
 # Generated outputs
-figures/
-outputs/
+/figures/
+/outputs/
 
-# Archive folder (old code)
-archive/
+# Archive folder (old code), except explicitly retained files
+/archive/*
+!/archive/07_coffee_impact_analysis.R
 
 # other
-Rplots.pdf
+/Rplots.pdf

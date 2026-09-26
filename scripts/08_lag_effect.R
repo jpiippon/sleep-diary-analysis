@@ -18,7 +18,7 @@
 #
 # Output:
 #   - outputs/08_lag_effect_models.txt
-#   - figures/19_lag_effect_coefficients.png
+#   - outputs/figures/core/19_lag_effect_coefficients.png
 # =============================================================================
 
 library(tidyverse)
@@ -29,7 +29,7 @@ source(here("scripts", "01_load_main_data.R"))
 
 if (!exists("df_clean")) stop("df_clean not found. Run 01_load_main_data.R first.")
 
-dir.create(here("figures"), showWarnings = FALSE)
+dir.create(here("outputs", "figures", "core"), showWarnings = FALSE, recursive = TRUE)
 dir.create(here("outputs"), showWarnings = FALSE)
 
 # =============================================================================
@@ -173,7 +173,7 @@ coef_plot <- ggplot(
   theme_sleep_simple()
 
 ggsave(
-  here("figures", "19_lag_effect_coefficients.png"),
+  here("outputs", "figures", "core", "19_lag_effect_coefficients.png"),
   coef_plot,
   width = 9,
   height = 4.8,
@@ -181,5 +181,5 @@ ggsave(
 )
 
 cat("\nSaved coefficient table to outputs/08_lag_effect_models.txt\n")
-cat("Saved coefficient plot to figures/19_lag_effect_coefficients.png\n")
+cat("Saved coefficient plot to outputs/figures/core/19_lag_effect_coefficients.png\n")
 

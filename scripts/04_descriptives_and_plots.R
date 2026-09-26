@@ -6,7 +6,7 @@
 #
 # Input: Clean dataset + joined sensor data from 03_join_relevant_data.R
 #
-# Outputs: Descriptive statistics and plots saved to figures/
+# Outputs: Descriptive statistics and plots saved to outputs/figures/core/
 # =============================================================================
 
 library(tidyverse)
@@ -16,7 +16,7 @@ library(here)
 
 source(here("scripts", "03_join_relevant_data.R"))
 
-fig_dir <- here("figures")
+fig_dir <- here("outputs", "figures", "core")
 fig_sleep_patterns_dir <- file.path(fig_dir, "01_sleep_patterns")
 fig_personal_factors_dir <- file.path(fig_dir, "02_sleep_personal_factors")
 fig_environment_dir <- file.path(fig_dir, "03_sleep_environment")
@@ -515,4 +515,4 @@ p_env_box <- sleep_mittari_sensor |>
 print(p_env_box)
 ggsave(file.path(fig_environment_dir, "12_sleep_by_co2_category.png"), p_env_box, width = 10, height = 6, dpi = 300)
 
-cat("\n✓ Analysis complete. Plots saved to figures/ subfolders.\n")
+cat("\n✓ Analysis complete. Plots saved to outputs/figures/core/ subfolders.\n")

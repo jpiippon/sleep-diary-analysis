@@ -4,7 +4,7 @@
 
 The diary date is the exposure day. Sleep recorded on Wednesday morning belongs
 to Tuesday if Tuesday contains the relevant coffee, bedtime, and other exposures.
-Sensor summaries use 21:00–08:00 in `Europe/Helsinki`, with 08:00 excluded.
+Sensor summaries use 21:00-08:00 in `Europe/Helsinki`, with 08:00 excluded.
 The previous-day adjustment is made to the local calendar date, including
 daylight-saving transitions. Excel sensor timestamps are assumed to store local
 clock time without timezone information.
@@ -27,7 +27,7 @@ review because exclusions change the sample and its sleep-history coverage.
 The undocumented `tukevaruoka = 1` is excluded rather than assigned an invented
 meaning; defined values are 0 and 2. Positive fractional `aivotyo` values remain
 valid legacy measurements: any positive value means evening brainwork.
-Phone parking codes 1–3 mean parked before 20:00, 21:00, and 22:00; zero means
+Phone parking codes 1-3 mean parked before 20:00, 21:00, and 22:00; zero means
 not parked. Child sleeping arrangement is not a measure of child illness.
 `kipea = 2` identifies inconsistently recorded child illness.
 
